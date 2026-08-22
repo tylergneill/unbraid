@@ -1,4 +1,4 @@
-import type { NoteEvent, Part, Score, TimelineMeasure } from './types';
+import type { LyricSyllable, NoteEvent, Part, Score, TimelineMeasure } from './types';
 import { pitchToMidi } from './pitch';
 import { childNumber, childText, hasChild, type XmlElement } from './xml';
 import { unrollMeasures, type UnrolledStep } from './unroll';
@@ -18,6 +18,8 @@ interface RawNote {
   staff: string;
   tieStart: boolean;
   tieStop: boolean;
+  /** Sung text attached to this note, already trimmed. Empty when none. */
+  lyric: string;
 }
 
 /** Everything read from one written measure of one MusicXML part. */
@@ -64,6 +66,42 @@ function readTies(note: XmlElement): { start: boolean; stop: boolean } {
     }
   }
   return { start, stop };
+}
+
+/**
+ * Read the sung syllable attached to a `<note>`.
+ *
+ * Only the first lyric line is taken. A second `<lyric number="2">` is a verse
+ * alternative — printing both interleaved would be unreadable in a single
+ * horizontal strip, and verse switching is not something this tool offers.
+ *
+ * The text is taken as written, including any hyphen the exporter put there
+ * (`tong-`, `cap-`). `<syllabic>` is deliberately *not* used to add hyphens.
+ * It ought to mean "this syllable continues into the next", but real exports
+ * misuse it constantly: in the Wellerman TTBB fixture MuseScore marks the
+ * separate words `put`/`to`, `Billy`/`of` and `Soon`/`may` as begin/end
+ * because the singer entered them as melismas, while genuinely split words
+ * (`bul`/`ly`, `tong-`/`uin'`) look no different. Adding a hyphen on that
+ * signal would print "Soon- may the Weller- men come". The literal text is the
+ * only trustworthy source, so it is what gets shown.
+ *
+ * `<elision>` (two syllables under one note) is joined with a tie character
+ * rather than dropped, since dropping one loses a word.
+ */
+function readLyric(note: XmlElement): string {
+  const lyric = note.child('lyric');
+  if (lyric === null) return '';
+
+  // The lyric line number: absent means the only line, which is line 1.
+  const number = lyric.attr('number');
+  if (number !== null && number.trim() !== '' && number.trim() !== '1') return '';
+
+  // A note can hold several <text> runs separated by <elision>.
+  const texts = lyric.children('text').map((t) => t.text().trim());
+  const text = texts.filter((t) => t !== '').join('\u203f');
+  if (text === '') return '';
+
+  return text;
 }
 
 /** Apply an <attributes> element to the running part state. */
@@ -138,6 +176,7 @@ function readMeasure(measure: XmlElement, state: PartState): RawMeasure {
             staff: (childText(el, 'staff') ?? '1').trim(),
             tieStart: ties.start,
             tieStop: ties.stop,
+            lyric: readLyric(el),
           });
         }
 
@@ -306,6 +345,69 @@ function mergeTies(events: (NoteEvent & { tieStart: boolean; tieStop: boolean })
   }
 
   return out;
+}
+
+/**
+ * Collect the sung text onto the unrolled timeline.
+ *
+ * Two things make this a score-level job rather than a per-part one. First,
+ * choral exports normally engrave the words under a single staff even though
+ * every part sings them, so reading lyrics from "your" part would show nothing
+ * for three singers out of four. Second, the words have to follow the repeat
+ * structure: a repeated bar is sung again, so its syllables are emitted again
+ * at the new time.
+ *
+ * The source part is the one carrying the most syllables. Ties are why the
+ * lowest voice is not simply used: a held note carries one syllable, so a part
+ * that sustains has fewer, and the part with the most is the one actually
+ * carrying the text.
+ */
+function collectLyrics(
+  rawByPart: RawMeasure[][],
+  steps: UnrolledStep[],
+  measures: TimelineMeasure[],
+): LyricSyllable[] {
+  let bestIndex = -1;
+  let bestCount = 0;
+  rawByPart.forEach((raws, index) => {
+    let count = 0;
+    for (const raw of raws) {
+      for (const note of raw.notes) if (note.lyric !== '') count++;
+    }
+    if (count > bestCount) {
+      bestCount = count;
+      bestIndex = index;
+    }
+  });
+  if (bestIndex === -1) return [];
+
+  const raws = rawByPart[bestIndex];
+  const syllables: LyricSyllable[] = [];
+
+  for (const [index, step] of steps.entries()) {
+    const raw = raws[step.writtenIndex];
+    if (raw === undefined) continue;
+    const start = measures[index].startBeats;
+
+    // Sort by offset so a syllable written after a <backup> still reads in
+    // time order, and de-duplicate onsets: a chord carries its word once.
+    const seen = new Set<number>();
+    const sung = raw.notes
+      .filter((note) => note.lyric !== '')
+      .sort((a, b) => a.offsetBeats - b.offsetBeats);
+
+    for (const note of sung) {
+      if (seen.has(note.offsetBeats)) continue;
+      seen.add(note.offsetBeats);
+      syllables.push({
+        onsetBeats: start + note.offsetBeats,
+        text: note.lyric,
+        measureNumber: raw.number,
+      });
+    }
+  }
+
+  return syllables;
 }
 
 /**
@@ -480,6 +582,7 @@ export function parseMusicXml(root: XmlElement, fallbackTitle = 'Untitled'): Sco
     measures,
     durationBeats,
     tempoBpm: readTempo(root, stateByPart[structuralIndex].beatType),
+    lyrics: collectLyrics(rawByPart, steps, measures),
     warnings,
   };
 }

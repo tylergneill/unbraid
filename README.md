@@ -18,7 +18,7 @@ npm run dev      # http://localhost:5173
 ```
 
 ```bash
-npm test         # 92 tests
+npm test         # 129 tests
 npm run build    # typecheck + production bundle
 ```
 
@@ -33,6 +33,11 @@ leaves the machine — projects live in IndexedDB.
 - **Split voices sharing a staff** into separate parts, so an SA-on-one-treble-staff
   score gives four faders rather than two.
 - **Band view**: one piano-roll lane per part, dots on a pitch scale, shared time axis.
+- **Lyrics** on that same time axis, so each word sits above the note it is sung
+  on. The strip starts above the bands and moves to just below your part once
+  you claim one. Text shrinks to stay aligned; where a piece is too dense for
+  words at the current zoom, it shows one dot per syllable rather than words in
+  the wrong place. Playback stays tones only — the words are there to read.
 - **Mixer** with three fader link modes, including *All but mine* — move everyone
   except your part.
 - **Loop** any span by dragging across the bar ruler; snaps to bar lines.
@@ -57,6 +62,7 @@ src/core/      parsing and domain logic — no DOM, no audio, fully tested
 src/audio/     Tone.js transport and one synth per part
 src/storage/   IndexedDB projects
 src/ui/        React components
+  Lyrics.tsx     the lyric strip: extraction is in musicxml.ts, fitting here
 tests/         vitest
 ```
 
@@ -70,6 +76,7 @@ Time is in quarter notes everywhere; MusicXML `divisions` never escape the parse
 tests/parser.test.ts   the fixtures, with exact known-good assertions
 tests/unit.test.ts     one behaviour each, over hand-written minimal scores
 tests/mixer.test.ts    link modes, loop regions, timeline helpers
+tests/lyrics.test.ts   lyric extraction, and the fitting the strip depends on
 ```
 
 Every test runs off `fixtures/`, which is committed. Nothing reads `downloads/`,
@@ -82,6 +89,7 @@ skips itself when a file is missing is not coverage.
 | `wellerman-fixture-shared-staff` | two voices per staff yield **4 parts, not 2** |
 | `cut-time-fixture` | 2/2, `divisions=2`, dotted notes, and **no tempo marking** |
 | `bach-bwv269` | a real score: pickup bar, ties, dense accidentals, counterpoint |
+| `lyrics-fixture` | words under a **non-first** part, repeated by a repeat, with an elision and a second verse to ignore |
 
 The load-bearing assertion is the unroll count: if it reports 16, repeats are not
 being expanded and the playhead will drift out of sync with the bands.
@@ -93,6 +101,14 @@ half speed and the playhead visibly lags the harmony.
 
 `.mxl` ingest is covered by zipping a fixture at test time, so the container
 manifest path is exercised without committing anyone's arrangement.
+
+`lyrics-fixture` pins the two things real exports get wrong. Words are engraved
+under one staff only, and often not the first, so lyrics are collected from
+whichever part carries the most rather than from part one. And `<syllabic>` is
+not a usable hyphen signal: MuseScore marks the separate words `put`/`to` and
+`Billy`/`of` as begin/end exactly as it marks the genuinely split `bul`/`ly`, so
+trusting it prints "Soon- may the Weller- men come". Only a hyphen the exporter
+actually wrote is kept.
 
 ## Verified end to end
 

@@ -36,6 +36,24 @@ export interface Part {
   source: { partId: string; voice: string };
 }
 
+/**
+ * One sung syllable, placed on the unrolled timeline.
+ *
+ * Lyrics are a property of the *song*, not of a part: a typical choral export
+ * writes the words under one staff only (the Wellerman TTBB fixture puts all
+ * 122 syllables under Tenor 1) even though every part sings them. So syllables
+ * are collected once, at score level, and displayed against whichever band the
+ * user has claimed.
+ */
+export interface LyricSyllable {
+  /** Onset in quarter notes from the start of the unrolled piece. */
+  onsetBeats: number;
+  /** The syllable exactly as the score wrote it, including any hyphen. */
+  text: string;
+  /** Measure number (as written) this syllable falls in. */
+  measureNumber: string;
+}
+
 /** A measure on the unrolled timeline. */
 export interface TimelineMeasure {
   /** Number as written in the score. Not unique — repeats reuse it. */
@@ -57,6 +75,11 @@ export interface Score {
   durationBeats: number;
   /** Tempo in quarter-notes per minute, from <sound tempo> or a default. */
   tempoBpm: number;
+  /**
+   * Sung text in performance order, or empty when the score carries none.
+   * Optional so that projects stored before lyrics existed still load.
+   */
+  lyrics?: LyricSyllable[];
   /** Non-fatal parse problems worth surfacing to the user (§5.2). */
   warnings: string[];
 }

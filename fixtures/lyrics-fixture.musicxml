@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<!--
+  Lyric-handling fixture. Synthetic, and each case is here on purpose:
+
+  * The words are under P2, not P1, because real choral exports engrave them
+    under one staff only and it is often not the first one.
+  * Measures 1-2 sit inside a repeat, so the words must sound twice.
+  * "shore-" and "line" carry an explicit hyphen, the only reliable hyphen
+    signal; "won" / "der" are marked begin/end with no hyphen written, which
+    real exporters also use for plain separate words, so no hyphen is added.
+  * Measure 3 has an <elision>, an empty <text/>, and a second <lyric
+    number="2"> verse line that must be ignored.
+-->
+<score-partwise version="4.0">
+  <work><work-title>Lyric fixture</work-title></work>
+  <identification><rights>Public domain / CC0 — synthetic test fixture</rights></identification>
+  <part-list>
+    <score-part id="P1"><part-name>Descant</part-name></score-part>
+    <score-part id="P2"><part-name>Melody</part-name></score-part>
+  </part-list>
+  <part id="P1">
+   <measure number="1">
+    <barline location="left"><bar-style>heavy-light</bar-style><repeat direction="forward"/></barline>
+    <attributes><divisions>2</divisions><key><fifths>0</fifths></key><time><beats>2</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+    <note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>
+    <note><pitch><step>D</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>
+   </measure>
+   <measure number="2">
+    <note><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>
+    <note><pitch><step>D</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>
+    <barline location="right"><bar-style>light-heavy</bar-style><repeat direction="backward"/></barline>
+   </measure>
+   <measure number="3">
+    <note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>
+    <note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>
+   </measure>
+  </part>
+  <part id="P2">
+   <measure number="1">
+    <attributes><divisions>2</divisions><key><fifths>0</fifths></key><time><beats>2</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+    <note>
+      <pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type>
+      <lyric number="1"><syllabic>single</syllabic><text>On</text></lyric>
+    </note>
+    <note>
+      <pitch><step>F</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type>
+      <lyric number="1"><syllabic>begin</syllabic><text>shore-</text></lyric>
+    </note>
+   </measure>
+   <measure number="2">
+    <note>
+      <pitch><step>G</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type>
+      <lyric number="1"><syllabic>end</syllabic><text>line</text></lyric>
+    </note>
+    <note>
+      <pitch><step>F</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type>
+      <lyric number="1"><syllabic>single</syllabic><text /></lyric>
+    </note>
+   </measure>
+   <measure number="3">
+    <note>
+      <pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type>
+      <lyric number="1"><syllabic>begin</syllabic><text>won</text></lyric>
+      <lyric number="2"><syllabic>single</syllabic><text>IGNORED</text></lyric>
+    </note>
+    <note>
+      <pitch><step>D</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type>
+      <lyric number="1"><syllabic>end</syllabic><text>der</text><elision> </elision><text>at</text></lyric>
+    </note>
+   </measure>
+  </part>
+</score-partwise>
