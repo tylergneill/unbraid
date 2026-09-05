@@ -1,6 +1,48 @@
+# Dependencies
 node_modules
+
+# Build output
 dist
-.DS_Store
-downloads
+dist-ssr
+*.tsbuildinfo
+
+# Test and coverage output
 coverage
+.vitest-cache
+
+# Caches from the build tooling
+.vite
+.cache
+.eslintcache
+
+# Editors — .idea is ignored whole, per project convention
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS cruft
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+
+# Scores fetched at runtime; tests read only committed fixtures/
+downloads
+
+# Scratch files
 *.local

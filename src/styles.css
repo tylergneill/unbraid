@@ -672,3 +672,84 @@ kbd {
   padding: 40px;
   color: var(--text-dim);
 }
+
+/* ---------- Lyrics ---------- */
+
+/* The strip is laid out exactly like a band row — sticky gutter, then content
+   at the shared width — so the words line up with the notes below them. */
+.lyric-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.lyric-gutter {
+  flex: none;
+  width: 168px;
+  padding: 0 12px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--panel);
+}
+
+/* Always one line, and always the same height: the font shrinks to fit, so
+   claiming a part never makes the bands jump. */
+.lyric-strip {
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  height: 26px;
+}
+
+/* Dots stand in for the words when no readable size fits them. They are
+   centred on their note rather than left-aligned to it, since a dot marks a
+   point in time where a word marks the start of one. */
+.lyric-strip.is-dotted .syllable {
+  transform: translate(-50%, -50%);
+  font-size: 15px;
+  color: var(--text-faint);
+}
+
+/* Absolutely positioned so each syllable sits at its own beat. `nowrap`
+   matters: a wrapped syllable would break the measured width the fitting
+   depends on. Font size is inherited from the strip, which the fitting sets. */
+/* `nowrap` matters: a syllable that wrapped would break the measured width
+   the fitting depends on. */
+.syllable {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: inherit;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--text-dim);
+  transition: color 0.15s;
+}
+
+/* Sits with the gutter label to explain the dots. */
+.lyric-hint {
+  margin-left: 7px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+/* Already-sung text dims back, so the eye lands on what is coming rather than
+   on what has gone. */
+.syllable.is-sung {
+  color: var(--text-faint);
+}
+
+/* When the strip sits under a claimed part it is that singer's own words, so
+   it takes the focus colour the rest of the "my part" affordances use. */
+.band-focus + .lyric-row .lyric-gutter {
+  color: var(--focus);
+}

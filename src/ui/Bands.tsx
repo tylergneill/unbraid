@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import type { MixState, Score } from '../core/types';
 import { midiToName } from '../core/pitch';
 import { bandColor, paintBand, paintRuler } from './bandPainter';
+import { Lyrics } from './Lyrics';
 
 /**
  * The multi-band piano roll (execution doc §6.2).
@@ -9,6 +10,11 @@ import { bandColor, paintBand, paintRuler } from './bandPainter';
  * All bands share one horizontal time axis and one playhead. Dragging on the
  * ruler defines the loop region; clicking without dragging clears it back to
  * whole-song.
+ *
+ * The lyric strip shares that axis too. It sits above every band until the
+ * user claims a part, then moves to just below the claimed one: the words a
+ * singer reads should be next to the line they are singing, not across the
+ * screen from it.
  */
 
 const LABEL_WIDTH = 168;
@@ -160,6 +166,23 @@ export function Bands({
 
   const loop = mix.loopRegion;
   const playheadX = positionBeats * scale;
+
+  // One strip, rendered in one of two places: above every band, or directly
+  // below the claimed one. Building the element once here keeps its props in a
+  // single spot rather than duplicating them at both sites.
+  const syllables = score.lyrics ?? [];
+  const focusIndex = score.parts.findIndex((p) => p.id === mix.focusPartId);
+  const lyricStrip =
+    syllables.length === 0 ? null : (
+      <Lyrics
+        syllables={syllables}
+        scale={scale}
+        width={contentWidth}
+        gutterLabel="Lyrics"
+        positionBeats={positionBeats}
+      />
+    );
+
   // Only a real loop drag previews; a scrub leaves the existing loop shading in
   // place so the user can see where they are seeking to within it.
   const previewing = drag !== null && drag.isDrag;
@@ -184,78 +207,82 @@ export function Bands({
           </div>
         </div>
 
+        {focusIndex === -1 && lyricStrip}
+
         {score.parts.map((part, index) => {
           const volume = mix.volumes[part.id] ?? 0;
           const isFocus = mix.focusPartId === part.id;
           return (
-            <div
-              key={part.id}
-              className={
-                [
-                  'band-row',
-                  volume === 0 ? 'band-muted' : '',
-                  isFocus ? 'band-focus' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')
-              }
-            >
-              <div className="band-label">
-                <button
-                  className={isFocus ? 'band-name is-focus' : 'band-name'}
-                  style={{ color: isFocus ? undefined : bandColor(index) }}
-                  onClick={() => onFocusPart(part.id)}
-                  title={
-                    isFocus
-                      ? `${part.label} is your part — click to unset`
-                      : `Click to make ${part.label} your part`
-                  }
-                  aria-pressed={isFocus}
-                >
-                  <span className="dot" />
-                  {part.label}
-                </button>
+            <Fragment key={part.id}>
+              <div
+                className={
+                  [
+                    'band-row',
+                    volume === 0 ? 'band-muted' : '',
+                    isFocus ? 'band-focus' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+                }
+              >
+                <div className="band-label">
+                  <button
+                    className={isFocus ? 'band-name is-focus' : 'band-name'}
+                    style={{ color: isFocus ? undefined : bandColor(index) }}
+                    onClick={() => onFocusPart(part.id)}
+                    title={
+                      isFocus
+                        ? `${part.label} is your part — click to unset`
+                        : `Click to make ${part.label} your part`
+                    }
+                    aria-pressed={isFocus}
+                  >
+                    <span className="dot" />
+                    {part.label}
+                  </button>
 
-                <span className="band-range">
-                  {/* The focus part is what "All but mine" and "Just my part"
-                      act on, so it needs to say so in words rather than only
-                      through a colour change. */}
-                  {isFocus ? (
-                    <span className="my-part">★ my part</span>
-                  ) : (
-                    <button className="claim-part" onClick={() => onFocusPart(part.id)}>
-                      set as mine
-                    </button>
-                  )}
-                  {part.range !== null && (
-                    <span className="range-text">
-                      {midiToName(part.range.minMidi)}–{midiToName(part.range.maxMidi)}
-                    </span>
-                  )}
-                </span>
+                  <span className="band-range">
+                    {/* The focus part is what "All but mine" and "Just my part"
+                        act on, so it needs to say so in words rather than only
+                        through a colour change. */}
+                    {isFocus ? (
+                      <span className="my-part">★ my part</span>
+                    ) : (
+                      <button className="claim-part" onClick={() => onFocusPart(part.id)}>
+                        set as mine
+                      </button>
+                    )}
+                    {part.range !== null && (
+                      <span className="range-text">
+                        {midiToName(part.range.minMidi)}–{midiToName(part.range.maxMidi)}
+                      </span>
+                    )}
+                  </span>
 
-                <div className="fader">
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={volume}
-                    aria-label={`${part.label} volume`}
-                    onChange={(e) => onVolumeChange(part.id, Number(e.target.value))}
+                  <div className="fader">
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={volume}
+                      aria-label={`${part.label} volume`}
+                      onChange={(e) => onVolumeChange(part.id, Number(e.target.value))}
+                    />
+                    <span className="value">{volume}</span>
+                  </div>
+                </div>
+
+                <div className="band-canvas-wrap" style={{ width: contentWidth }}>
+                  <canvas
+                    ref={(el) => {
+                      if (el === null) canvasRefs.current.delete(part.id);
+                      else canvasRefs.current.set(part.id, el);
+                    }}
                   />
-                  <span className="value">{volume}</span>
                 </div>
               </div>
-
-              <div className="band-canvas-wrap" style={{ width: contentWidth }}>
-                <canvas
-                  ref={(el) => {
-                    if (el === null) canvasRefs.current.delete(part.id);
-                    else canvasRefs.current.set(part.id, el);
-                  }}
-                />
-              </div>
-            </div>
+              {isFocus && lyricStrip}
+            </Fragment>
           );
         })}
 
