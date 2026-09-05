@@ -1,7 +1,9 @@
-# Harmoneeze — Execution Doc (v1)
+# Unbraid — Execution Doc (v1)
 
 **Status:** design draft for agent handoff
-**Name:** working title "Harmoneeze" (from *harmony* + *ease*). Provisional — see §10.
+**Name:** "Unbraid" — the app pulls a braided-together chorus apart so one part
+can be practised against the rest. Settled; replaced the provisional
+"Harmoneeze" working title.
 **Relationship to other work:** standalone. Not part of Kalpataru Grove; no shared infrastructure, no Sanskrit/DH dependencies.
 
 ---
@@ -18,14 +20,14 @@ Tools that already do parts of this: **MuseScore Studio** (free, desktop) has a 
 with per-part faders, loop in/out points, and tempo control. **Choral Practice** (iOS)
 is a MusicXML player built specifically for rehearsing one's own part.
 
-Harmoneeze is not competing on features. It is competing on **restraint**.
+Unbraid is not competing on features. It is competing on **restraint**.
 
 MuseScore Studio is a notation editor with playback attached. The three controls a
 by-ear learner needs are buried inside several hundred they don't, arranged for
 composing rather than practising. That is a legitimate design for what it is, and a
 poor fit for someone who only wants to hear the alto line twelve times in a row.
 
-**The design constraint that follows:** every screen in Harmoneeze should be usable
+**The design constraint that follows:** every screen in Unbraid should be usable
 by someone who cannot read music and has no interest in editing a score. If a control
 exists to serve notation, composition, engraving, or printing, it does not belong in
 this app. The correction surface in §5.3 is the sole exception, and it stays at the
@@ -215,7 +217,12 @@ Recommendation: pick one SATB arrangement, commit its MusicXML into the repo as 
 
 ## 11. Open questions
 
-1. **Name.** "Harmonease" is contested — there is an existing `harmonease.com`, a discontinued veterinary product under that mark, and (most relevantly) *HarmonEase Innovations*, a startup building assistive devices for pianists. That is close enough in the music space to be a real conflict. "Harmoneeze" appears clear by comparison, though it loses some of the visual "ease" pun. Revisit before anything public.
+1. ~~**Name.**~~ *Resolved:* the app is **Unbraid**. The earlier *harmony + ease*
+   candidates are abandoned — "Harmonease" collided with *HarmonEase Innovations*
+   (assistive devices for pianists, close enough in the music space to be a real
+   conflict) and "Harmoneeze" only dodged that by mangling the spelling. "Unbraid"
+   describes what the app actually does — separating braided voices — and carries
+   the visual mark. Trademark search before anything public is still worth doing.
 2. **Multi-voice staves.** How aggressively should v1 try to split two voices sharing one staff? Affects a lot of real choral sheet music.
 3. **Part labeling.** Fall back to what when the score has no part names — "Staff 1/2/3"? Infer from clef and range?
 4. **Score display.** Is the piano-roll enough, or does the user also want the original score image visible alongside for reference?

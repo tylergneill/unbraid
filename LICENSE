@@ -1,4 +1,4 @@
-Harmoneeze
+Unbraid
 
 Copyright (c) 2026 Tyler Neill
 
@@ -54,14 +54,14 @@ Notices:
 
 Third-party material
 
-  This licence covers the Harmoneeze source code and its own assets. It
+  This licence covers the Unbraid source code and its own assets. It
   does not extend to:
 
   - Third-party dependencies, which carry their own licences (see the
     `node_modules` metadata or `package-lock.json`).
 
   - Any musical score a user imports. Scores remain under whatever terms
-    their own rights holders set. Harmoneeze stores them only in the
+    their own rights holders set. Unbraid stores them only in the
     user's browser and never transmits them.
 
   - The test fixtures in `fixtures/`:

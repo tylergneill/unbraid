@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Unbraid">
+  <rect width="512" height="512" rx="116" fill="#0F2B33"/>
+  <g transform="translate(256 256) scale(1.28) translate(-206 -270)">
+  <path d="M34 310 C68 310 68 230 102 230 C135 230 135 150 169 150 C207 150 207 150 244 150 C298 150 298 150 352 150" fill="none" stroke="#6aa9ff" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 150 C68 150 68 230 102 230 C135 230 135 310 169 310 C207 310 207 230 244 230 C298 230 298 230 352 230" fill="none" stroke="#ffcb6b" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 390 C68 390 68 310 102 310 C135 310 135 230 169 230 C207 230 207 310 244 310 C298 310 298 310 352 310" fill="none" stroke="#7fd88f" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 230 C68 230 68 310 102 310 C135 310 135 390 169 390 C207 390 207 390 244 390 C298 390 298 390 352 390" fill="none" stroke="#ff9a76" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="370" y="119" width="62" height="62" rx="18" fill="#6aa9ff"/>
+  <rect x="370" y="199" width="62" height="62" rx="18" fill="#ffcb6b"/>
+  <rect x="370" y="279" width="62" height="62" rx="18" fill="#7fd88f"/>
+  <rect x="370" y="359" width="62" height="62" rx="18" fill="#ff9a76"/>
+  </g>
+</svg>

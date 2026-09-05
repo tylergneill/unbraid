@@ -78,7 +78,7 @@ export function parseScoreFile(
       throw new Error('That file is XML, but not a MusicXML score.');
     }
     throw new Error(
-      'Harmoneeze reads MusicXML (.musicxml, .xml) and compressed MusicXML (.mxl).',
+      'Unbraid reads MusicXML (.musicxml, .xml) and compressed MusicXML (.mxl).',
     );
   }
 

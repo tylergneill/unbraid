@@ -1,5 +1,5 @@
 /*
- * Harmoneeze styles.
+ * Unbraid styles.
  *
  * The design constraint from §1a is restraint: every screen must be usable by
  * someone who cannot read music. So the bands get the space and the contrast,
@@ -14,8 +14,12 @@
   --text: #e8eaed;
   --text-dim: #9aa1ad;
   --text-faint: #6b7280;
-  /* Brand gold, from the logo. Identity only — the functional accent below
-     stays blue so the playhead and faders never read as "selected part". */
+  /* Wordmark gold. The mark itself is drawn in all four band colours; the
+     wordmark stays a single flat colour so the topbar reads as a label and not
+     a second piece of artwork. Deliberately a shade deeper than the gold band
+     (--focus, #ffcb6b): identity must not collide with the "my part" focus
+     highlight. Identity only — the functional accent below stays blue so the
+     playhead and faders never read as "selected part". */
   --brand: #e8b04b;
   --brand-deep: #0f2b33;
 
@@ -160,9 +164,8 @@ textarea:focus {
   margin-left: -3px;
 }
 
-/* The mark is drawn in currentColor, so it takes the brand gold from here. */
+/* The mark carries its own four band colours, so it sets no colour here. */
 .brand-mark {
-  color: var(--brand);
   flex: none;
 }
 

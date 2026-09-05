@@ -1,17 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Harmoneeze mark: an eighth note zooming with motion lines">
-  
-
-  <g transform="translate(168 44) rotate(-13 140 220)" fill="currentColor">
-    <g stroke="currentColor" stroke-width="16" stroke-linecap="round">
-      <line x1="-16" y1="168" x2="66" y2="168"/>
-      <line x1="-72" y1="238" x2="58" y2="238"/>
-      <line x1="-30" y1="302" x2="48" y2="302"/>
-    </g>
-
-    <ellipse cx="120" cy="300" rx="43" ry="29" transform="rotate(-21 120 300)"/>
-    <rect x="155" y="126" width="13" height="172" rx="5"/>
-    <path d="M168 126
-             C 220 150, 244 186, 231 236
-             C 233 196, 208 170, 168 180 Z"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 133 410 274" width="410" height="274" role="img" aria-label="Unbraid: four braided voices separating into four parts">
+  <path d="M34 310 C68 310 68 230 102 230 C135 230 135 150 169 150 C207 150 207 150 244 150 C298 150 298 150 352 150" fill="none" stroke="currentColor" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 150 C68 150 68 230 102 230 C135 230 135 310 169 310 C207 310 207 230 244 230 C298 230 298 230 352 230" fill="none" stroke="currentColor" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 390 C68 390 68 310 102 310 C135 310 135 230 169 230 C207 230 207 310 244 310 C298 310 298 310 352 310" fill="none" stroke="currentColor" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 230 C68 230 68 310 102 310 C135 310 135 390 169 390 C207 390 207 390 244 390 C298 390 298 390 352 390" fill="none" stroke="currentColor" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="378" y="127" width="46" height="46" rx="14" fill="currentColor"/>
+  <rect x="378" y="207" width="46" height="46" rx="14" fill="currentColor"/>
+  <rect x="378" y="287" width="46" height="46" rx="14" fill="currentColor"/>
+  <rect x="378" y="367" width="46" height="46" rx="14" fill="currentColor"/>
 </svg>

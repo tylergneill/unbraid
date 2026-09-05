@@ -1,4 +1,4 @@
-# harmoneeze
+# unbraid
 
 Minimalistic interface for practicing a cappella harmonies.
 
@@ -6,7 +6,7 @@ Upload a score, turn everyone else down, loop the tricky bit, and sing along unt
 it sticks. There is no assessment, no microphone, and no notation editing —
 looping and repetition is the entire pedagogy.
 
-This is **Milestone 1** of [the execution doc](design_docs/harmoneeze-execution-doc.md):
+This is **Milestone 1** of [the execution doc](design_docs/unbraid-execution-doc.md):
 the practice instrument, with MusicXML import only. OMR (image/PDF ingest) and the
 note-level correction surface are M2/M3 and are not built.
 

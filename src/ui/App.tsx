@@ -118,9 +118,9 @@ export function App() {
     <div className="app">
       <div className="topbar">
         <h1 className="brand">
-          <Logo size={26} className="brand-mark" />
-          <span className="wordmark">Harmoneeze</span>
-          <span className="version" title={`Harmoneeze ${__APP_VERSION__}`}>
+          <Logo size={34} className="brand-mark" />
+          <span className="wordmark">Unbraid</span>
+          <span className="version" title={`Unbraid ${__APP_VERSION__}`}>
             v{__APP_VERSION__}
           </span>
         </h1>

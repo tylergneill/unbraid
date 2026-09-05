@@ -1,4 +1,4 @@
-import { openDB, type IDBPDatabase } from 'idb';
+import { deleteDB, openDB, type IDBPDatabase } from 'idb';
 import type { MixState, Project, Score } from '../core/types';
 import { initialMixState } from '../core/mixer';
 
@@ -9,9 +9,37 @@ import { initialMixState } from '../core/mixer';
  * question about uploaded sheet music sitting on someone else's disk.
  */
 
-const DB_NAME = 'harmoneeze';
+const DB_NAME = 'unbraid';
 const DB_VERSION = 1;
 const STORE = 'projects';
+
+/**
+ * The pre-rebrand database name.
+ *
+ * Nothing reads it any more, but a browser that ran the old build still has it
+ * on disk holding scores the user can no longer see. Dropping it on first open
+ * keeps the rename from leaving orphaned data behind; it is fire-and-forget
+ * because failing to delete a database nobody reads must never block startup.
+ */
+const LEGACY_DB_NAME = 'harmoneeze';
+
+/** Set once the delete has been attempted, so it runs at most once per page. */
+let legacyDropped = false;
+
+function dropLegacyDB(): void {
+  if (legacyDropped) return;
+  legacyDropped = true;
+
+  void deleteDB(LEGACY_DB_NAME, {
+    // Another tab from the old build still holds it open. The request stays
+    // pending indefinitely rather than failing, so nothing here can force it;
+    // the delete simply lands whenever that tab goes away, or on a later load.
+    blocked() {},
+  }).catch(() => {
+    // Storage unavailable, or the delete was refused. The live database is
+    // unaffected either way, and a database nobody reads is not worth an error.
+  });
+}
 
 /** What actually goes to disk: the source file plus everything derived. */
 interface StoredProject {
@@ -40,6 +68,8 @@ let dbPromise: Promise<IDBPDatabase> | null = null;
 
 function db(): Promise<IDBPDatabase> {
   if (dbPromise === null) {
+    dropLegacyDB();
+
     const opening = openDB(DB_NAME, DB_VERSION, {
       upgrade(database) {
         if (!database.objectStoreNames.contains(STORE)) {

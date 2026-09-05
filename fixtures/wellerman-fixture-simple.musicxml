@@ -2,7 +2,7 @@
 <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
 <score-partwise version="4.0">
   <work><work-title>The Wellerman (structural fixture)</work-title></work>
-  <identification><creator type="composer">Traditional (setting: Harmoneeze test fixture)</creator><rights>Public domain / CC0 — synthetic test fixture</rights></identification>
+  <identification><creator type="composer">Traditional (setting: Unbraid test fixture)</creator><rights>Public domain / CC0 — synthetic test fixture</rights></identification>
   <part-list>
     <score-part id="P1"><part-name>Soprano</part-name><part-abbreviation>S</part-abbreviation></score-part>
     <score-part id="P2"><part-name>Alto</part-name><part-abbreviation>A</part-abbreviation></score-part>

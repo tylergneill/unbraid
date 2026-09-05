@@ -1,4 +1,4 @@
-# Harmoneeze test fixtures
+# Unbraid test fixtures
 
 Two MusicXML files for building and validating Milestone 1.
 
@@ -56,7 +56,7 @@ will drift out of sync with the bands.
 ## `real-bach-bwv269.musicxml` — the reality check
 
 A Bach chorale (BWV 269), exported from the music21 corpus. Public domain, and
-already SATB four-part vocal music — the exact texture Harmoneeze targets.
+already SATB four-part vocal music — the exact texture Unbraid targets.
 
 This file is **not** a controlled fixture. It's messy in the way real scores are:
 pickup bar, fermatas, ties, dense accidentals, 24 measures of actual counterpoint.
