@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
 <!--
-  Cut-time fixture — original, written from scratch for Harmoneeze. CC0.
+  Cut-time fixture — original, written from scratch for Unbraid. CC0.
 
   Exercises the properties real MuseScore exports have that the Wellerman
   fixtures do not:
@@ -25,7 +25,7 @@
 <score-partwise version="4.0">
   <work><work-title>Cut Time (structural fixture)</work-title></work>
   <identification>
-    <creator type="composer">Harmoneeze test fixture</creator>
+    <creator type="composer">Unbraid test fixture</creator>
     <rights>Public domain / CC0 — synthetic test fixture</rights>
   </identification>
   <part-list>

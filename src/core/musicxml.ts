@@ -424,7 +424,7 @@ export function parseMusicXml(root: XmlElement, fallbackTitle = 'Untitled'): Sco
 
   if (root.tag === 'score-timewise') {
     throw new Error(
-      'This file is timewise MusicXML, which Harmoneeze cannot read yet. Re-export it as partwise MusicXML.',
+      'This file is timewise MusicXML, which Unbraid cannot read yet. Re-export it as partwise MusicXML.',
     );
   }
   if (root.tag !== 'score-partwise') {

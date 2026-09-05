@@ -1,14 +1,15 @@
 /**
- * The Harmoneeze mark: an eighth note zooming, with motion lines.
+ * The Unbraid mark: voices entering tangled and leaving as separate parts.
  *
- * Inlined rather than loaded from `src/imgs/logo-mark.svg` as an <img>, so it
- * inherits `currentColor` from whatever it sits in — the source file is drawn
- * with `fill="currentColor"` precisely so it can be tinted by CSS, and an
- * <img> tag would sever that.
+ * Drawn in the band colours from `bandPainter.ts` rather than a single fill, so
+ * the identity and the interface share one palette. That is also why the SVG is
+ * inlined instead of loaded from `src/imgs/logo-mark.svg` through an <img>,
+ * which would flatten it. (`logo-mark.svg` keeps a one-colour currentColor copy
+ * for anywhere that needs one.)
  *
- * The artwork is drawn low and right inside its 512 square, so the viewBox is
- * tightened to the rotated group's real bounds. Without that it renders small
- * and off-centre at topbar sizes.
+ * `src/imgs/favicon.svg` is the same braid redrawn for small sizes — heavier
+ * strokes, bigger nodes, less margin — so the tab icon and this agree. Change
+ * the geometry here and it needs regenerating there too.
  */
 
 interface Props {
@@ -17,32 +18,79 @@ interface Props {
   className?: string;
 }
 
+/*
+ * The first four BAND_COLORS from bandPainter.ts, in that order — the colours an
+ * SATB score's four voices actually get. The mark's strands exit top to bottom
+ * in the same order, so the logo shows the same four colours as the bands below
+ * it. Keep in step with BAND_COLORS.
+ */
+const BLUE = '#6aa9ff';
+const GOLD = '#ffcb6b';
+const GREEN = '#7fd88f';
+const SALMON = '#ff9a76';
+
+/**
+ * The mark is drawn on the same 512 grid as the exported SVGs, then cropped by
+ * viewBox to the artwork's real bounds — the square has wide margins that would
+ * otherwise render it small and off-centre.
+ */
+const FULL_VIEW = { x: 18, y: 133, w: 410, h: 274 };
+
+/** Four strands weaving on the left, resolving into four nodes on the right. */
+function FullMark() {
+  return (
+    <>
+      <path
+        d="M34 310 C68 310 68 230 102 230 C135 230 135 150 169 150 C207 150 207 150 244 150 C298 150 298 150 352 150"
+        fill="none"
+        stroke={BLUE}
+        strokeWidth="26"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M34 150 C68 150 68 230 102 230 C135 230 135 310 169 310 C207 310 207 230 244 230 C298 230 298 230 352 230"
+        fill="none"
+        stroke={GOLD}
+        strokeWidth="26"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M34 390 C68 390 68 310 102 310 C135 310 135 230 169 230 C207 230 207 310 244 310 C298 310 298 310 352 310"
+        fill="none"
+        stroke={GREEN}
+        strokeWidth="26"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M34 230 C68 230 68 310 102 310 C135 310 135 390 169 390 C207 390 207 390 244 390 C298 390 298 390 352 390"
+        fill="none"
+        stroke={SALMON}
+        strokeWidth="26"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <rect x="378" y="127" width="46" height="46" rx="14" fill={BLUE} />
+      <rect x="378" y="207" width="46" height="46" rx="14" fill={GOLD} />
+      <rect x="378" y="287" width="46" height="46" rx="14" fill={GREEN} />
+      <rect x="378" y="367" width="46" height="46" rx="14" fill={SALMON} />
+    </>
+  );
+}
+
 export function Logo({ size = 24, className }: Props) {
   return (
     <svg
       className={className}
-      viewBox="68 139 372 304"
+      viewBox={`${FULL_VIEW.x} ${FULL_VIEW.y} ${FULL_VIEW.w} ${FULL_VIEW.h}`}
       width={size}
-      height={size * (304 / 372)}
+      height={size * (FULL_VIEW.h / FULL_VIEW.w)}
       role="img"
-      aria-label="Harmoneeze"
-      fill="currentColor"
+      aria-label="Unbraid"
     >
-      <g transform="translate(168 44) rotate(-13 140 220)">
-        <g stroke="currentColor" strokeWidth="16" strokeLinecap="round">
-          <line x1="-16" y1="168" x2="66" y2="168" />
-          <line x1="-72" y1="238" x2="58" y2="238" />
-          <line x1="-30" y1="302" x2="48" y2="302" />
-        </g>
-
-        <ellipse cx="120" cy="300" rx="43" ry="29" transform="rotate(-21 120 300)" />
-        <rect x="155" y="126" width="13" height="172" rx="5" />
-        <path
-          d="M168 126
-             C 220 150, 244 186, 231 236
-             C 233 196, 208 170, 168 180 Z"
-        />
-      </g>
+      <FullMark />
     </svg>
   );
 }
