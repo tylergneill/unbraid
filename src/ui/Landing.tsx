@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Project } from '../core/types';
+import { MudcatWizard } from './MudcatWizard';
 
 /**
  * Landing page — the project organizer (execution doc §6.1).
@@ -28,6 +29,7 @@ function describe(project: Project): string {
 
 export function Landing({ projects, onOpen, onDelete, onRename, onUpload, busy }: Props) {
   const [dragOver, setDragOver] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +80,22 @@ export function Landing({ projects, onOpen, onDelete, onRename, onUpload, busy }
         <strong>{busy ? 'Reading score…' : 'Drop a score here, or click to choose'}</strong>
         <span className="hint">MusicXML (.musicxml, .xml) or compressed MusicXML (.mxl)</span>
       </div>
+
+      {import.meta.env.DEV && (
+        <p className="or-mudcat">
+          or <button onClick={() => setWizardOpen(true)}>find an arrangement on Mudcat</button>
+        </p>
+      )}
+
+      {wizardOpen && (
+        <MudcatWizard
+          onClose={() => setWizardOpen(false)}
+          onImport={(file) => {
+            setWizardOpen(false);
+            onUpload(file);
+          }}
+        />
+      )}
 
       <input
         ref={inputRef}

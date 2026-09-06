@@ -756,3 +756,216 @@ kbd {
 .band-focus + .lyric-row .lyric-gutter {
   color: var(--focus);
 }
+
+/* ---------- Mudcat wizard ---------- */
+
+/*
+ * A modal, which the rest of the app avoids. It earns the exception: the flow
+ * is a detour with its own three steps, and returning the user to exactly the
+ * landing page they left is the whole point.
+ */
+.wizard-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 12, 15, 0.66);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 20px;
+  overflow-y: auto;
+  z-index: 40;
+}
+
+.wizard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 620px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.wizard-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.wizard-head h3 {
+  margin: 0;
+  font-size: 16px;
+  flex: 1;
+}
+
+.wizard-body {
+  padding: 18px;
+}
+
+.wizard-body .lede {
+  color: var(--text-dim);
+  margin: 0 0 18px;
+}
+
+.wizard-body code {
+  background: var(--bg);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 12.5px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.field span {
+  display: block;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  margin-bottom: 5px;
+}
+
+.wizard-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.wizard-actions .hint,
+.wizard-actions .source-link {
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.wizard-actions .source-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.wizard-actions .source-link:hover {
+  text-decoration: underline;
+}
+
+/* Push the confirming action to the right, whatever precedes it. */
+.wizard-actions .primary {
+  margin-left: auto;
+}
+
+.wizard-error {
+  margin: 16px 18px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: rgba(255, 107, 107, 0.12);
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  color: #ffb4b4;
+  font-size: 13px;
+}
+
+.tune-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tune-row {
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 11px 13px;
+}
+
+.tune-row:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tune-row .title {
+  display: block;
+  font-weight: 600;
+}
+
+.tune-row .meta {
+  display: block;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+
+/* Why the ranker chose this tune. Quiet, but present — a wrong pick should
+   look wrong rather than arbitrary. */
+.tune-row .why {
+  display: block;
+  color: var(--accent);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.threads {
+  margin-top: 18px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+.threads summary {
+  cursor: pointer;
+}
+
+.threads ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.threads a {
+  color: var(--text-dim);
+}
+
+.abc-source {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  resize: vertical;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.wizard-warnings {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: var(--focus);
+  font-size: 12.5px;
+}
+
+.wizard-warnings .meta {
+  color: var(--text-faint);
+}
+
+/* The wizard's entry point, directly under the dropzone. */
+.or-mudcat {
+  margin-top: 12px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.or-mudcat button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.or-mudcat button:hover {
+  text-decoration: underline;
+  background: none;
+}
