@@ -38,14 +38,49 @@ export interface ScoredTune extends AbcTune {
   score: number;
   /** Human-readable reasons, shown in the wizard so the pick is not a mystery. */
   reasons: string[];
+  /**
+   * Requirements this tune fails, e.g. "only one voice".
+   *
+   * Non-empty means the tune is filtered out of the results; the wizard
+   * reports how many were removed so an empty list is explicable.
+   */
+  missing: string[];
+  /**
+   * `score` as a 0-100 percentage of what this query could award.
+   *
+   * The raw score is unbounded and its scale shifts with the query — a search
+   * with three keywords can earn far more than one with none — so the raw
+   * number means nothing to a reader. This divides by the best a tune could
+   * have done *for this particular query*, which is comparable across
+   * searches and is what the UI shows.
+   */
+  match: number;
 }
 
-/** What the user is looking for. Every field is optional. */
+/** One free-text term to look for, and whether it is a hard requirement. */
+export interface Keyword {
+  /** e.g. "harmony", "SATB", "Seekers" — matched against the tune and its post. */
+  text: string;
+  /** When true, a tune that does not match is excluded rather than demoted. */
+  required: boolean;
+}
+
+/**
+ * What the user is looking for.
+ *
+ * `multiPart` is separate from the keywords because it is structural rather
+ * than textual: it asks whether the ABC actually declares more than one voice,
+ * which is the thing that decides whether a tune is usable in this app at all.
+ * A post saying the word "harmony" is much weaker evidence than a tune that
+ * contains two `V:` blocks.
+ */
 export interface TuneQuery {
   title?: string;
-  artist?: string;
-  /** e.g. "harmony", "SATB", "tenor" — matched against body and prose. */
-  parts?: string;
+  keywords?: Keyword[];
+  /** Require more than one voice. Defaults to true; the app is for harmony. */
+  multiPart?: boolean;
+  /** False (the default) counts matching threads only; true reads them. */
+  read?: boolean;
 }
 
 /**
@@ -106,6 +141,10 @@ function looksLikeAbcLine(line: string): boolean {
   if (t === '') return false;
   // An information field: single letter, colon. `w:` carries lyrics.
   if (/^[A-Za-z]:/.test(t)) return true;
+  // An inline field opening the line, `[V:1] B2B2 ...`. Multi-voice scores are
+  // routinely written this way — one line per voice, per system — so missing
+  // it truncates precisely the arrangements this app most wants.
+  if (/^\[[A-Za-z]:/.test(t)) return true;
   // A comment or directive.
   if (t.startsWith('%')) return true;
   // Notation: made of note letters, accidentals, bars, durations, groupings.
@@ -170,7 +209,7 @@ export function extractTunes(postText: string, postIndex: number, author: string
       metre: field(abc, 'M'),
       key: field(abc, 'K'),
       unitLength: field(abc, 'L'),
-      voices: (abc.match(/^V:/gm) ?? []).length,
+      voices: countVoices(abc),
       postIndex,
       author,
     });
@@ -179,6 +218,21 @@ export function extractTunes(postText: string, postIndex: number, author: string
   }
 
   return tunes;
+}
+
+/**
+ * Count the distinct voices a tune declares.
+ *
+ * Both spellings count: a `V:1` header line, and the inline `[V:1]` that opens
+ * a line of notation. They are usually both present — the header declares the
+ * voice and names it, the inline form marks which voice a line belongs to —
+ * so the ids are deduplicated rather than added up.
+ */
+function countVoices(abc: string): number {
+  const ids = new Set<string>();
+  for (const m of abc.matchAll(/^V:\s*(\S+)/gm)) ids.add(m[1]);
+  for (const m of abc.matchAll(/\[V:\s*([^\]\s]+)/g)) ids.add(m[1]);
+  return ids.size;
 }
 
 /** Case- and punctuation-insensitive containment. */
@@ -190,17 +244,23 @@ function loosely(haystack: string, needle: string): boolean {
 }
 
 /**
- * Rank tunes against what the user asked for.
+ * Score every tune, keeping those that fail a requirement.
  *
  * The weights encode a simple belief: a title match is strong evidence, a
  * multi-voice tune is what someone practising harmony actually wants, and a
  * tune missing `K:` is likely to be a fragment quoted mid-discussion.
  * Reasons are surfaced in the UI so a wrong pick is visibly wrong.
  */
-export function scoreTunes(tunes: AbcTune[], query: TuneQuery, postText: string[] = []): ScoredTune[] {
+function scoreAll(tunes: AbcTune[], query: TuneQuery, postText: string[] = []): ScoredTune[] {
+  // Harmony is the point of the app, so multi-part is required unless the user
+  // deliberately turns it off.
+  const wantsMultiPart = query.multiPart !== false;
+  const keywords = (query.keywords ?? []).filter((k) => k.text.trim() !== '');
+
   const scored = tunes.map((tune) => {
     let score = 0;
     const reasons: string[] = [];
+    const missing: string[] = [];
     const context = postText[tune.postIndex] ?? '';
 
     if (query.title !== undefined && query.title.trim() !== '') {
@@ -213,23 +273,23 @@ export function scoreTunes(tunes: AbcTune[], query: TuneQuery, postText: string[
       }
     }
 
-    if (query.artist !== undefined && query.artist.trim() !== '') {
-      if (loosely(context, query.artist) || loosely(tune.text, query.artist)) {
-        score += 20;
-        reasons.push(`mentions “${query.artist}”`);
-      }
-    }
-
-    if (query.parts !== undefined && query.parts.trim() !== '') {
-      if (loosely(context, query.parts) || loosely(tune.text, query.parts)) {
-        score += 20;
-        reasons.push(`mentions “${query.parts}”`);
+    for (const keyword of keywords) {
+      const hit = loosely(context, keyword.text) || loosely(tune.text, keyword.text);
+      if (hit) {
+        score += keyword.required ? 30 : 20;
+        reasons.push(`mentions “${keyword.text}”`);
+      } else if (keyword.required) {
+        missing.push(`no “${keyword.text}”`);
       }
     }
 
     if (tune.voices > 1) {
       score += 25;
       reasons.push(`${tune.voices} voices`);
+    } else if (wantsMultiPart) {
+      // A single-voice tune cannot give the user parts to practise against, so
+      // it fails the requirement outright rather than merely scoring low.
+      missing.push('only one voice');
     }
 
     // Completeness. K: is required by the standard; L: is routinely forgotten
@@ -251,8 +311,47 @@ export function scoreTunes(tunes: AbcTune[], query: TuneQuery, postText: string[
       reasons.push('has lyrics');
     }
 
-    return { ...tune, score, reasons };
+    return { ...tune, score, reasons, missing };
   });
 
-  return scored.sort((a, b) => b.score - a.score);
+  // The ceiling for this query: every keyword hit, a title match, multiple
+  // voices, a key, a full-length tune and lyrics.
+  const ceiling =
+    (query.title !== undefined && query.title.trim() !== '' ? 50 : 0) +
+    keywords.reduce((total, k) => total + (k.required ? 30 : 20), 0) +
+    25 + // more than one voice
+    10 + // has a key field
+    12 + // a substantial tune body
+    8; // has lyrics
+
+  return scored.map((tune) => ({
+    ...tune,
+    match: Math.max(0, Math.min(100, Math.round((tune.score / ceiling) * 100))),
+  }));
+}
+
+/**
+ * Rank tunes, dropping any that fail a requirement.
+ */
+export function scoreTunes(tunes: AbcTune[], query: TuneQuery, postText: string[] = []): ScoredTune[] {
+  return scoreAndPartition(tunes, query, postText).tunes;
+}
+
+/**
+ * Rank tunes, and report what the requirements removed.
+ *
+ * Separate from `scoreTunes` so the caller can tell "no ABC in these threads"
+ * apart from "ABC found, but none of it multi-part" — two results that look
+ * identical in the UI but mean very different things to the user.
+ */
+export function scoreAndPartition(
+  tunes: AbcTune[],
+  query: TuneQuery,
+  postText: string[] = [],
+): { tunes: ScoredTune[]; suppressed: ScoredTune[] } {
+  const all = scoreAll(tunes, query, postText);
+  return {
+    tunes: all.filter((t) => t.missing.length === 0).sort((a, b) => b.score - a.score),
+    suppressed: all.filter((t) => t.missing.length > 0).sort((a, b) => b.score - a.score),
+  };
 }

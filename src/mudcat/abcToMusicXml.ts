@@ -192,7 +192,9 @@ function parseBody(
       continue;
     }
 
-    const out = ensure(currentVoice);
+    // Resolved per note rather than once per line: an inline `[V:n]` switch
+    // partway through a line must redirect the notes that follow it, and a
+    // line beginning `[V:3]` is the usual way a multi-voice score is written.
     let i = 0;
     // Chord state: `inChord` is true between [ and ], and `chordOpen` marks
     // that the chord's first note has been placed, so every later member
@@ -362,7 +364,7 @@ function parseBody(
           }
         }
 
-        out.push({
+        ensure(currentVoice).push({
           step,
           octave,
           alter: effective,
@@ -379,12 +381,14 @@ function parseBody(
 
       // Broken rhythm: a> lengthens this note and shortens the next.
       if (letter === '>') {
+        const out = ensure(currentVoice);
         if (out.length > 0) out[out.length - 1].quarters *= 1.5;
         brokenRhythm = -0.5;
         i += 1;
         continue;
       }
       if (letter === '<') {
+        const out = ensure(currentVoice);
         if (out.length > 0) out[out.length - 1].quarters *= 0.5;
         brokenRhythm = 0.5;
         i += 1;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractTunes, scoreTunes, sanitizeAbc } from '../src/mudcat/abc';
+import { extractTunes, scoreTunes, scoreAndPartition, sanitizeAbc } from '../src/mudcat/abc';
 import { parseSearchResults, parseThreadPosts } from '../src/mudcat/thread';
 import { abcToMusicXml, parseKey } from '../src/mudcat/abcToMusicXml';
 import { parseXml } from '../src/core/xmlParse';
@@ -53,8 +53,8 @@ describe('extractTunes', () => {
 describe('scoreTunes', () => {
   it('ranks a title match above a non-match', () => {
     const tunes = [
-      ...extractTunes('X:1\nT:Wellerman\nK:D\nDEF|', 0, 'a'),
-      ...extractTunes('X:1\nT:Something Else\nK:D\nDEF|', 1, 'b'),
+      ...extractTunes('X:1\nT:Wellerman\nK:D\nV:1\nDEF|\nV:2\nGAB|', 0, 'a'),
+      ...extractTunes('X:1\nT:Something Else\nK:D\nV:1\nDEF|\nV:2\nGAB|', 1, 'b'),
     ];
     const ranked = scoreTunes(tunes, { title: 'Wellerman' });
     expect(ranked[0].title).toBe('Wellerman');
@@ -67,6 +67,62 @@ describe('scoreTunes', () => {
       ...extractTunes('X:1\nT:A\nK:C\nV:1\nCDEF|\nV:2\nGABc|', 1, 'b'),
     ];
     expect(scoreTunes(tunes, {})[0].voices).toBe(2);
+  });
+
+  it('suppresses a single-voice tune by default', () => {
+    const tunes = extractTunes('X:1\nT:A\nK:C\nCDEF|', 0, 'a');
+    expect(scoreTunes(tunes, {})).toHaveLength(0);
+
+    // It is still reported separately, so the wizard can say why it is gone.
+    const split = scoreAndPartition(tunes, {});
+    expect(split.suppressed).toHaveLength(1);
+    expect(split.suppressed[0].missing).toContain('only one voice');
+  });
+
+  it('does not flag one voice when multi-part is turned off', () => {
+    const tunes = extractTunes('X:1\nT:A\nK:C\nCDEF|', 0, 'a');
+    expect(scoreTunes(tunes, { multiPart: false })[0].missing).toHaveLength(0);
+  });
+
+  it('drops a high-scoring single-voice tune in favour of a multi-voice one', () => {
+    // The single-voice tune scores higher on substance, but the multi-part
+    // requirement removes it entirely rather than merely ranking it lower.
+    const tunes = [
+      ...extractTunes('X:1\nT:A\nK:C\nCDEF|GABc|CDEF|GABc|CDEF|GABc|', 0, 'a'),
+      ...extractTunes('X:1\nT:A\nK:C\nV:1\nCD|\nV:2\nGA|', 1, 'b'),
+    ];
+    const ranked = scoreTunes(tunes, {});
+    expect(ranked).toHaveLength(1);
+    expect(ranked[0].voices).toBe(2);
+  });
+
+  it('suppresses a tune missing a required keyword', () => {
+    const tunes = [
+      ...extractTunes('X:1\nT:A\nK:C\nV:1\nCD|\nV:2\nGA|', 0, 'a'),
+      ...extractTunes('X:1\nT:B\nK:C\nV:1\nCD|\nV:2\nGA|', 1, 'b'),
+    ];
+    const ranked = scoreAndPartition(
+      tunes,
+      { keywords: [{ text: 'shanty', required: true }] },
+      ['a rousing shanty for four voices', 'just a tune'],
+    );
+    expect(ranked.tunes).toHaveLength(1);
+    expect(ranked.tunes[0].title).toBe('A');
+    expect(ranked.suppressed[0].missing).toContain('no “shanty”');
+  });
+
+  it('keeps an unchecked keyword as a preference, not a filter', () => {
+    const tunes = [
+      ...extractTunes('X:1\nT:A\nK:C\nV:1\nCD|\nV:2\nGA|', 0, 'a'),
+      ...extractTunes('X:1\nT:B\nK:C\nV:1\nCD|\nV:2\nGA|', 1, 'b'),
+    ];
+    const ranked = scoreTunes(
+      tunes,
+      { keywords: [{ text: 'shanty', required: false }] },
+      ['a rousing shanty', 'just a tune'],
+    );
+    expect(ranked).toHaveLength(2);
+    expect(ranked[0].title).toBe('A');
   });
 });
 
@@ -227,7 +283,11 @@ describe('end to end', () => {
       V:2<br>ABcd|DEFG|<br></p>`;
     const posts = parseThreadPosts(html);
     const tunes = posts.flatMap((p, i) => extractTunes(p.text, i, p.author));
-    const ranked = scoreTunes(tunes, { title: 'Wellerman', parts: 'SATB' }, posts.map((p) => p.text));
+    const ranked = scoreTunes(
+      tunes,
+      { title: 'Wellerman', keywords: [{ text: 'SATB', required: false }] },
+      posts.map((p) => p.text),
+    );
 
     expect(ranked[0].title).toBe('Wellerman');
     expect(ranked[0].voices).toBe(2);
@@ -235,5 +295,76 @@ describe('end to end', () => {
     const score = parseMusicXml(parseXml(abcToMusicXml(ranked[0].text).musicXml));
     expect(score.parts).toHaveLength(2);
     expect(score.parts[0].events.length).toBeGreaterThan(0);
+  });
+});
+
+describe('match percentage', () => {
+  it('scores a tune meeting everything near 100', () => {
+    const abc = 'X:1\nT:Wellerman\nM:4/4\nL:1/4\nK:D\nV:1\nDEFG|ABcd|DEFG|ABcd|\nV:2\nABcd|DEFG|ABcd|DEFG|\nw:soon may the well-er-man come';
+    const tunes = extractTunes(abc, 0, 'a');
+    const [ranked] = scoreTunes(tunes, { title: 'Wellerman' }, ['a shanty']);
+    expect(ranked.match).toBeGreaterThan(85);
+  });
+
+  it('scores a bare fragment low', () => {
+    const tunes = extractTunes('X:1\nT:Something\nK:C\nV:1\nCD|\nV:2\nGA|', 0, 'a');
+    const [ranked] = scoreTunes(tunes, { title: 'Wellerman' }, ['unrelated']);
+    expect(ranked.match).toBeLessThan(50);
+  });
+
+  it('stays within 0-100 however many keywords are given', () => {
+    const abc = 'X:1\nT:A\nK:C\nV:1\nCD|\nV:2\nGA|';
+    const ranked = scoreTunes(
+      extractTunes(abc, 0, 'a'),
+      { keywords: [{ text: 'x', required: true }, { text: 'y', required: false }] },
+      ['x y'],
+    );
+    expect(ranked[0].match).toBeGreaterThanOrEqual(0);
+    expect(ranked[0].match).toBeLessThanOrEqual(100);
+  });
+});
+
+// Shaped after "Babylon is Fallen" (mudcat thread 4024), a real four-part
+// Sacred Harp arrangement — the form multi-voice scores are actually posted in.
+describe('inline [V:n] voice switches', () => {
+  const ABC = `X:2
+T:Babylon is Fallen
+L:1/8
+M:4/4
+V:1
+V:2
+V:3 transpose -24
+K:EMin
+[V:1] B2B2 BGE2|
+[V:2] G2G2 E2G2|
+[V:3] e2e2 B2e2|`;
+
+  it('does not stop extracting at the first [V:n] line', () => {
+    const [tune] = extractTunes(ABC, 0, 'a');
+    expect(tune.text).toContain('[V:3]');
+  });
+
+  it('counts voices declared inline and in the header without double-counting', () => {
+    const [tune] = extractTunes(ABC, 0, 'a');
+    expect(tune.voices).toBe(3);
+  });
+
+  it('routes each line to the voice its inline switch names', () => {
+    const { voiceIds, musicXml } = abcToMusicXml(ABC);
+    expect(voiceIds).toEqual(['1', '2', '3']);
+
+    const score = parseMusicXml(parseXml(musicXml));
+    expect(score.parts).toHaveLength(3);
+    // Every part must carry notes; binding the target voice once per line
+    // sent them all into the first part and left the others empty.
+    for (const part of score.parts) expect(part.events.length).toBeGreaterThan(0);
+  });
+
+  it('follows a voice switch that appears mid-line', () => {
+    const { musicXml } = abcToMusicXml('X:1\nL:1/4\nM:4/4\nV:1\nV:2\nK:C\n[V:1] CD [V:2] GA|');
+    const score = parseMusicXml(parseXml(musicXml));
+    expect(score.parts).toHaveLength(2);
+    expect(score.parts[0].events).toHaveLength(2);
+    expect(score.parts[1].events).toHaveLength(2);
   });
 });

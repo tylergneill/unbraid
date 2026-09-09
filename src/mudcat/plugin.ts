@@ -13,7 +13,7 @@
 import type { Connect, Plugin } from 'vite';
 import type { ServerResponse } from 'node:http';
 import { parseSearchResults, parseThreadPosts } from './thread';
-import { extractTunes, scoreTunes, type TuneQuery } from './abc';
+import { extractTunes, scoreAndPartition, type TuneQuery } from './abc';
 import { abcToMusicXml } from './abcToMusicXml';
 
 const ORIGIN = 'https://mudcat.org';
@@ -23,11 +23,24 @@ const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-/** Politeness gap between requests to the forum, in milliseconds. */
-const THROTTLE_MS = 900;
+/**
+ * Politeness gap between requests to the forum, in milliseconds.
+ *
+ * Measured: thread pages come back in ~30-300ms (mean ~96ms over a sample),
+ * so this gap, not the server, is what paces a search. 400ms keeps us well
+ * under the rate a person clicking through results would generate while
+ * making a deeper search practical.
+ */
+const THROTTLE_MS = 400;
 
-/** How many threads deep to look before giving up on a query. */
-const MAX_THREADS = 5;
+/**
+ * Hard ceiling on threads read in one sweep.
+ *
+ * Reading a thread costs ~100ms plus the politeness gap, so a typical 40-hit
+ * search is ~20s. This cap stops a pathologically broad query from turning
+ * into a very long run of requests against a small volunteer-run forum.
+ */
+const MAX_THREADS = 60;
 
 let lastFetch = 0;
 
@@ -92,10 +105,12 @@ async function runSearch(query: TuneQuery): Promise<string> {
   //
   // Mudcat's search ANDs its terms, and every extra word collapses the result
   // set hard: "wellerman" returns nine threads, "wellerman abc" returns one.
-  // So artist and parts are deliberately *not* sent — they are ranking signals
-  // applied to the posts we retrieve, not filters applied to the search.
-  const terms = [query.title, query.artist, query.parts]
-    .filter((t): t is string => t !== undefined && t.trim() !== '')[0] ?? '';
+  // So keywords are deliberately *not* sent — they filter and rank the posts
+  // we retrieve, which is a far better use of them than shrinking the search.
+  const terms =
+    query.title !== undefined && query.title.trim() !== ''
+      ? query.title.trim()
+      : (query.keywords ?? []).map((k) => k.text).find((t) => t.trim() !== '') ?? '';
 
   const body = new URLSearchParams({
     query: terms,
@@ -125,41 +140,71 @@ export function mudcatPlugin(): Plugin {
             return json(res, 400, { error: 'Malformed request body' });
           }
 
-          const asked = [query.title, query.artist, query.parts].some(
-            (v) => v !== undefined && v.trim() !== '',
-          );
-          if (!asked) return json(res, 400, { error: 'Give at least a title, artist or part.' });
+          const asked =
+            (query.title !== undefined && query.title.trim() !== '') ||
+            (query.keywords ?? []).some((k) => k.text.trim() !== '');
+          if (!asked) return json(res, 400, { error: 'Give at least a title or a keyword.' });
 
           try {
             const searchHtml = await runSearch(query);
-            const threads = parseSearchResults(searchHtml).slice(0, MAX_THREADS);
+            const all = parseSearchResults(searchHtml);
 
-            if (threads.length === 0) {
-              return json(res, 200, { threads: [], tunes: [], note: 'No threads matched.' });
+            if (all.length === 0) {
+              return json(res, 200, { threads: [], tunes: [], matched: 0, note: 'No threads matched.' });
             }
 
-            const tunes = [];
-            const visited = [];
+            // Two-step by default: report how many threads matched and stop,
+            // so the user can decide whether the wait is worth it. Mudcat's
+            // ranking is about discussion, not notation, so there is no
+            // sensible "best few" to read on their behalf.
+            if (query.read !== true) {
+              return json(res, 200, { threads: [], tunes: [], matched: all.length, counted: true });
+            }
+
+            const threads = all.slice(0, MAX_THREADS);
+
+            // Stream one JSON object per line (NDJSON) as each thread is read.
+            // A sweep of 40 threads is ~16s, which is far too long to stare at
+            // a spinner, and the interesting part — whether threads are turning
+            // up notation at all — is knowable long before the end.
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-store');
+            const send = (event: unknown) => res.write(`${JSON.stringify(event)}\n`);
+
+            send({ type: 'start', matched: all.length, reading: threads.length });
+
+            let withAbc = 0;
+            let suppressed = 0;
 
             for (const thread of threads) {
               let posts;
               try {
                 posts = parseThreadPosts(await politeFetch(thread.url));
               } catch (e) {
-                visited.push({ ...thread, error: e instanceof Error ? e.message : 'failed' });
+                send({
+                  type: 'thread',
+                  thread: { ...thread, error: e instanceof Error ? e.message : 'failed' },
+                  tunes: [],
+                });
                 continue;
               }
 
               const texts = posts.map((p) => p.text);
               const found = posts.flatMap((post, i) => extractTunes(post.text, i, post.author));
-              const ranked = scoreTunes(found, query, texts);
+              const ranked = scoreAndPartition(found, query, texts);
+              suppressed += ranked.suppressed.length;
+              if (found.length > 0) withAbc += 1;
 
-              visited.push({ ...thread, tuneCount: ranked.length });
-              for (const tune of ranked) tunes.push({ ...tune, thread });
+              send({
+                type: 'thread',
+                thread: { ...thread, tuneCount: ranked.tunes.length, hadAbc: found.length > 0 },
+                tunes: ranked.tunes.map((tune) => ({ ...tune, thread })),
+              });
             }
 
-            tunes.sort((a, b) => b.score - a.score);
-            json(res, 200, { threads: visited, tunes: tunes.slice(0, 25) });
+            send({ type: 'done', withAbc, suppressed });
+            res.end();
           } catch (e) {
             json(res, 502, {
               error: e instanceof Error ? e.message : 'Could not reach mudcat.org',
