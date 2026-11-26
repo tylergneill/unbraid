@@ -19,7 +19,7 @@ npm run dev      # http://localhost:5173
 ```
 
 ```bash
-npm test         # 154 tests
+npm test         # 167 tests
 npm run build    # typecheck + production bundle
 ```
 
@@ -57,43 +57,73 @@ recording* listens to an audio file and makes its best guess at the parts, then
 opens it in the same band view, so the mixer, loop and tempo all work as usual.
 Playback is still the synthesised tones, not the recording.
 
-It happens in three steps, all in the browser:
+Three choices sit under the dropzone:
 
-1. **Hear the notes.** [Basic Pitch](https://github.com/spotify/basic-pitch-ts)
-   (Spotify, Apache-2.0), a ~900 KB polyphonic pitch model, runs on
-   TensorFlow.js, on the GPU via WebGL where available. It reports every
-   pitch it hears with a start and a length, but not who sang it. TensorFlow.js
-   (~1 MB) is loaded only when a recording is first imported; score users never
-   download it. The thresholds are in `TRANSCRIBER_SETTINGS`.
-2. **Split them into parts** (`splitIntoVoices`). Chord by chord, notes are
-   matched to voices high to low (voices never cross within a chord), each
-   note going to whichever voice can reach it by the smallest step. A faint
-   note that fits no voice's line (usually an overtone) is left out rather
-   than shoving every other voice down. Then each unaccompanied stretch,
-   such as a shanty's solo verse, is reassigned whole to the voice that best
-   carries it on into, or in from, the surrounding harmony. The part count is
-   estimated from how many notes usually sound together, or set by hand (1–6).
-3. **Find the bar lines** (`estimateBeatGrid`). A steady tempo and downbeat are
-   estimated from where notes begin. Notes are *not* snapped to this grid: they
-   keep the recording's own timing, so a wrong guess only misplaces bar lines
-   (and loop-snapping), never the music.
+- **Recording**: *Song with instruments* (the default) separates vocals from
+  instruments first; *Voices only* skips that, for unaccompanied singing.
+- **Vocal parts**: how many parts to split the singing into, or *Work it out*.
+- **Sensitivity**: *High* hears quieter notes, such as backing harmonies mixed
+  under a lead, at the cost of a few more stray ones.
+
+It all happens in the browser, in up to four steps:
+
+1. **Separate by sound** (songs with instruments). Meta's
+   [HTDemucs](https://github.com/facebookresearch/demucs), via Kevin Gibbons's
+   [JavaScript port](https://github.com/bakkot/demucs-js), splits the mix into
+   vocals, bass, other instruments, and drums. This is where *timbre* comes in:
+   the later steps hear only pitch, so this is what tells a bass guitar from a
+   bass singer. The ~170 MB model arrives with `npm install` (it ships inside
+   the `demucs` package) and is served by the app to itself, so nothing is
+   downloaded at run time and nothing is uploaded. It runs on the GPU through
+   WebGPU (current Chrome, Edge, Safari); without WebGPU it falls back to the CPU,
+   which is several times slower and freezes the page while it works.
+2. **Hear the notes** in each stem (or in the whole recording, for voices only).
+   [Basic Pitch](https://github.com/spotify/basic-pitch-ts) (Spotify,
+   Apache-2.0), a ~900 KB polyphonic pitch model, runs on TensorFlow.js. It
+   reports every pitch it hears with a start and a length, but not who sang it.
+   Thresholds are in `TRANSCRIBER_SETTINGS` and `SENSITIVITY_THRESHOLDS`. Drums
+   are not transcribed, and a stem with nothing in it is skipped.
+3. **Split the singing into parts** (`splitIntoVoices`). Chord by chord, notes
+   are matched to parts high to low (parts never cross within a chord), each
+   going to whichever part can reach it by the smallest step. Notes that look
+   like overtones (a much fainter octave, twelfth or double octave moving in
+   lockstep with a louder note; `isLikelyOvertone`) are cheap to leave out;
+   anything else is expensive to leave out, so a quiet harmony entering a part
+   that has rested all song is kept. Each unaccompanied stretch, such as a
+   solo verse, is then reassigned whole to the part that best carries it on
+   into, or in from, the surrounding harmony. The bass stem becomes one line;
+   the other-instruments stem stays one band, chords and all.
+4. **Find the bar lines** (`estimateBeatGrid`). A steady tempo and downbeat are
+   estimated from where notes begin, across all stems. Notes are *not* snapped
+   to this grid: they keep the recording's own timing, so a wrong guess only
+   misplaces bar lines (and loop-snapping), never the music.
+
+**Part count.** *Work it out* takes the fullest texture the singing *sustains*,
+however briefly overall: four parts holding together for a few seconds in a
+four-minute song means four parts, three of which rest most of the time. A
+texture only counts in stretches of at least 0.3 s adding up to 1.5 s, and
+overtones are not counted, so stray notes do not invent parts.
+
+**Part names.** Without separation, parts are *Part 1 (top)* … *Part 4
+(bottom)*: pitch order and nothing more, since the pitch model cannot tell a
+bass singer from a bass guitar. With separation, the names say which stem a
+part came from: *Vocals 1 (top)* …, *Bass*, *Other instruments*. There is no
+pitch floor or ceiling; the model covers A0–C8.
 
 **How good is it?** On the two synthetic fixtures below, 96–99% of correctly
 heard notes land in the right part, and both tempi and the shanty's downbeat
-come out exact. A real recording will do worse: breath, consonants, vibrato,
-room sound, and unison doubling all cost accuracy. It does best when each part
-is clearly audible on its own (a quartet rather than a choir) and the tempo is
-steady.
+come out exact. Separation was checked on a synthetic band mix (formant-synth
+choir, plucked bass, piano, drums): the bass came out clean in its own band and
+the bar lines landed on its downbeats, but the separator put some of the
+synthetic singing into *Other instruments*. Real voices should fare better
+there, since that is what it was trained on, but this has not been measured.
 
-Parts are named *Part 1 (top)* … *Part 4 (bottom)*: in pitch order, and nothing
-more. The model hears pitch, not timbre, so it cannot tell a bass singer from a
-bass guitar, and the names do not pretend to. For the same reason there is no
-pitch floor or ceiling: an instrument's line is a part like any other, across
-the model's full A0–C8 range.
-
-Known limits: bar lines assume one tempo and 4/4 throughout; no lyrics; an
-inner voice the transcriber misses can pull its neighbours into the wrong part
-for that chord. Fixing individual notes is the M3 correction surface.
+Known limits: bar lines assume one tempo and 4/4 throughout; no lyrics; vibrato
+can make the pitch model hear one held note as several pieces; a quiet part
+exactly an octave or a twelfth above a louder one, moving in lockstep, can be
+taken for an overtone; an inner part the transcriber misses can pull its
+neighbours into the wrong part for that chord. Fixing individual notes is the
+M3 correction surface.
 
 ## Layout
 
@@ -109,7 +139,9 @@ src/core/      parsing and domain logic — no DOM, no audio, fully tested
   timeline.ts    loop regions, snapping, pitch ranges
   transcription.ts  recording → Score: part count, voice split, beat grid
 src/audio/     Tone.js transport and one synth per part
-  transcriber.ts decoding and Basic Pitch inference (lazy-loaded)
+  transcriber.ts decoding, and Basic Pitch inference per stem (lazy-loaded)
+  stems.ts       Demucs instrument separation (lazy-loaded)
+src/vendor/    demucs/apply.js, with a NaN fix in its overlap-add (see header)
 src/storage/   IndexedDB projects
 src/ui/        React components
   Lyrics.tsx     the lyric strip: extraction is in musicxml.ts, fitting here
@@ -179,7 +211,9 @@ adapt freely, with attribution, non-commercially, under the same terms. See
 [LICENSE](LICENSE).
 
 This covers the source and its own assets, not third-party dependencies (Basic
-Pitch and its model are Apache-2.0) and not any score or recording you import —
+Pitch and its model are Apache-2.0; the Demucs port is MIT, and its weights,
+derived from Meta's, are described by its author as for personal and research
+use only) and not any score or recording you import —
 imported material stays under its own rights holders' terms and never leaves your
 browser.
 

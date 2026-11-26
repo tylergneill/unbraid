@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import type { Project } from '../core/types';
-import { MAX_PARTS } from '../core/transcription';
+import { MAX_PARTS, type Sensitivity } from '../core/transcription';
 
 /**
  * Landing page — the project organizer (execution doc §6.1).
@@ -23,13 +23,22 @@ export interface RecordingProgress {
   fraction: number | null;
 }
 
+/** The choices on the recording tab. */
+export interface RecordingImportOptions {
+  /** Separate vocals from instruments before listening for notes. */
+  withInstruments: boolean;
+  /** How many parts to split the singing into. */
+  partCount: number | 'auto';
+  sensitivity: Sensitivity;
+}
+
 interface Props {
   projects: Project[];
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onUpload: (file: File) => void;
-  onUploadRecording: (file: File, partCount: number | 'auto') => void;
+  onUploadRecording: (file: File, options: RecordingImportOptions) => void;
   busy: boolean;
   recordingProgress: RecordingProgress | null;
 }
@@ -118,7 +127,13 @@ export function Landing({
   recordingProgress,
 }: Props) {
   const [mode, setMode] = useState<ImportMode>('score');
-  const [partCount, setPartCount] = useState<number | 'auto'>('auto');
+  const [recordingOptions, setRecordingOptions] = useState<RecordingImportOptions>({
+    withInstruments: true,
+    partCount: 'auto',
+    sensitivity: 'normal',
+  });
+  const setOption = (change: Partial<RecordingImportOptions>) =>
+    setRecordingOptions((previous) => ({ ...previous, ...change }));
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
 
@@ -162,13 +177,13 @@ export function Landing({
           <Dropzone
             accept=".mp3,.m4a,.mp4,.aac,.wav,audio/*"
             disabled={working}
-            onFile={(file) => onUploadRecording(file, partCount)}
+            onFile={(file) => onUploadRecording(file, recordingOptions)}
           >
             {recordingProgress === null ? (
               <>
                 <strong>Drop a recording here, or click to choose</strong>
                 <span className="hint">
-                  MP3 or M4A. Works best when each part is clearly audible on its own.
+                  MP3 or M4A. Works best when each part is clearly audible.
                 </span>
               </>
             ) : (
@@ -189,13 +204,24 @@ export function Landing({
             )}
           </Dropzone>
           <div className="import-options">
-            <label>
-              Parts
+            <label title="Separating takes longer, and loads a 170 MB model the first time">
+              Recording
               <select
-                value={String(partCount)}
+                value={recordingOptions.withInstruments ? 'instruments' : 'voices'}
+                disabled={working}
+                onChange={(e) => setOption({ withInstruments: e.target.value === 'instruments' })}
+              >
+                <option value="instruments">Song with instruments</option>
+                <option value="voices">Voices only</option>
+              </select>
+            </label>
+            <label>
+              {recordingOptions.withInstruments ? 'Vocal parts' : 'Parts'}
+              <select
+                value={String(recordingOptions.partCount)}
                 disabled={working}
                 onChange={(e) =>
-                  setPartCount(e.target.value === 'auto' ? 'auto' : Number(e.target.value))
+                  setOption({ partCount: e.target.value === 'auto' ? 'auto' : Number(e.target.value) })
                 }
               >
                 <option value="auto">Work it out</option>
@@ -206,10 +232,24 @@ export function Landing({
                 ))}
               </select>
             </label>
-            <span className="hint">
-              Notes are heard automatically, so expect some to be missing or in the wrong part.
-            </span>
+            <label title="High hears quieter notes, such as backing harmonies, at the cost of a few more stray ones">
+              Sensitivity
+              <select
+                value={recordingOptions.sensitivity}
+                disabled={working}
+                onChange={(e) => setOption({ sensitivity: e.target.value as Sensitivity })}
+              >
+                <option value="normal">Normal</option>
+                <option value="high">High (quiet harmonies)</option>
+              </select>
+            </label>
           </div>
+          <p className="import-note">
+            {recordingOptions.withInstruments
+              ? 'Vocals are separated from the instruments first; the bass and other instruments get bands of their own. '
+              : ''}
+            Notes are heard automatically, so expect some to be missing or in the wrong part.
+          </p>
         </>
       )}
 

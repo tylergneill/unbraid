@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Project } from '../core/types';
 import { parseScoreFile } from '../core/ingest';
 import { parseXmlDom } from '../core/domXml';
-import { scoreFromRecording } from '../core/transcription';
+import { scoreFromStems } from '../core/transcription';
 import { isSupportedAudioFile, transcribeRecording, type TranscribeStage } from '../audio/transcriber';
 import {
   createProject,
@@ -12,7 +12,7 @@ import {
   renameProject,
   saveProject,
 } from '../storage/projects';
-import { Landing, type RecordingProgress } from './Landing';
+import { Landing, type RecordingImportOptions, type RecordingProgress } from './Landing';
 import { Logo } from './Logo';
 import { ProjectView } from './ProjectView';
 
@@ -86,22 +86,34 @@ export function App() {
   );
 
   const handleRecordingUpload = useCallback(
-    async (file: File, partCount: number | 'auto') => {
+    async (file: File, options: RecordingImportOptions) => {
       setError(null);
       if (!isSupportedAudioFile(file.name)) {
         setError('Unbraid reads recordings as MP3 or M4A (WAV and AAC also work).');
         return;
       }
 
+      const stemName = { mix: '', vocals: ' in the vocals', bass: ' in the bass', other: ' in the other instruments' };
+      const percent = (f: number | null) => (f === null ? '' : ` ${Math.round(f * 100)}%`);
       const show = (s: TranscribeStage) => {
         switch (s.stage) {
           case 'decoding':
             return setRecordingProgress({ label: 'Decoding the recording…', fraction: null });
+          case 'loading-separator':
+            return setRecordingProgress({
+              label: `Loading the instrument-separation model…${percent(s.fraction)}`,
+              fraction: s.fraction,
+            });
+          case 'separating':
+            return setRecordingProgress({
+              label: `Separating vocals from instruments…${percent(s.fraction)}`,
+              fraction: s.fraction,
+            });
           case 'loading-model':
             return setRecordingProgress({ label: 'Loading the listening model…', fraction: null });
           case 'listening':
             return setRecordingProgress({
-              label: `Listening for notes… ${Math.round(s.fraction * 100)}%`,
+              label: `Listening for notes${stemName[s.stem]}…${percent(s.fraction)}`,
               fraction: s.fraction,
             });
           case 'splitting':
@@ -112,10 +124,14 @@ export function App() {
       let project: Project;
       try {
         const bytes = await file.arrayBuffer();
-        const heard = await transcribeRecording(bytes, show);
+        const heard = await transcribeRecording(
+          bytes,
+          { separateInstruments: options.withInstruments, sensitivity: options.sensitivity },
+          show,
+        );
         show({ stage: 'splitting' });
         const title = file.name.replace(/\.[^.]+$/, '') || 'Untitled recording';
-        const score = scoreFromRecording(heard, { title, partCount });
+        const score = scoreFromStems(heard, { title, partCount: options.partCount });
         project = createProject(score, { name: file.name, bytes });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'That recording could not be transcribed.');
@@ -198,7 +214,7 @@ export function App() {
           busy={busy}
           recordingProgress={recordingProgress}
           onUpload={(file) => void handleUpload(file)}
-          onUploadRecording={(file, parts) => void handleRecordingUpload(file, parts)}
+          onUploadRecording={(file, options) => void handleRecordingUpload(file, options)}
           onOpen={(id) => void handleOpen(id)}
           onDelete={(id) => void deleteProject(id).then(refresh)}
           onRename={(id, title) => void renameProject(id, title).then(refresh)}

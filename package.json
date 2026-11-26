@@ -25,8 +25,10 @@
   "dependencies": {
     "@spotify/basic-pitch": "^1.0.1",
     "@tensorflow/tfjs": "^3.21.0",
+    "demucs": "^1.0.0",
     "fflate": "^0.8.3",
     "idb": "^8.0.3",
+    "onnxruntime-web": "~1.23.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tone": "^15.1.22"
@@ -39,5 +41,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "onnxruntime-node": "npm:onnxruntime-web@~1.23.2"
   }
 }

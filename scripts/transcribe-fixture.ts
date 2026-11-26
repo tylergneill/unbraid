@@ -1,7 +1,10 @@
 /**
  * Regenerate a fixtures/audio/*.notes.json file from a recording.
  *
- *   npx tsx scripts/transcribe-fixture.ts in.mp3 fixtures/audio/out.notes.json
+ *   npx tsx scripts/transcribe-fixture.ts in.mp3 fixtures/audio/out.notes.json [high]
+ *
+ * The optional last argument is the sensitivity ("normal", the default, or
+ * "high"), as chosen on the app's recording tab.
  *
  * Runs the same Basic Pitch model, with the same TRANSCRIBER_SETTINGS, as the
  * app does in the browser, but on TensorFlow.js's plain-JS CPU backend, so it
@@ -11,13 +14,14 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { TRANSCRIBER_SETTINGS } from '../src/core/transcription';
+import { SENSITIVITY_THRESHOLDS, TRANSCRIBER_SETTINGS, type Sensitivity } from '../src/core/transcription';
 
 const require = createRequire(import.meta.url);
 const tf = require('@tensorflow/tfjs');
 const { BasicPitch, outputToNotesPoly, noteFramesToTime } = require('@spotify/basic-pitch');
 
-const [input, output] = process.argv.slice(2);
+const [input, output, sensitivityArg = 'normal'] = process.argv.slice(2);
+const sensitivity = sensitivityArg as Sensitivity;
 if (!input || !output) {
   console.error('usage: npx tsx scripts/transcribe-fixture.ts <recording> <out.notes.json>');
   process.exit(1);
@@ -56,9 +60,10 @@ await new BasicPitch(model).evaluateModel(
 );
 
 const s = TRANSCRIBER_SETTINGS;
+const t = SENSITIVITY_THRESHOLDS[sensitivity];
 const round = (x: number) => Math.round(x * 1000) / 1000;
 const notes = noteFramesToTime(
-  outputToNotesPoly(frames, onsets, s.onsetThreshold, s.frameThreshold, s.minNoteFrames, s.inferOnsets, s.maxFreqHz, s.minFreqHz, s.melodiaTrick),
+  outputToNotesPoly(frames, onsets, t.onsetThreshold, t.frameThreshold, s.minNoteFrames, s.inferOnsets, s.maxFreqHz, s.minFreqHz, s.melodiaTrick),
 ).map((n: { startTimeSeconds: number; durationSeconds: number; pitchMidi: number; amplitude: number }) => ({
   startSec: round(n.startTimeSeconds),
   durationSec: round(n.durationSeconds),

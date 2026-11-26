@@ -67,6 +67,23 @@ export const TRANSCRIBER_SETTINGS = {
   melodiaTrick: false,
 } as const;
 
+export type Sensitivity = 'normal' | 'high';
+
+/**
+ * Thresholds per sensitivity setting. "Normal" is TRANSCRIBER_SETTINGS.
+ *
+ * "High" is for parts mixed quietly under a lead, typically backing
+ * harmonies. It hears more real notes and more overtones; the overtone check
+ * in the splitter (`isLikelyOvertone`) is what keeps the latter in check.
+ */
+export const SENSITIVITY_THRESHOLDS: Record<Sensitivity, { onsetThreshold: number; frameThreshold: number }> = {
+  normal: {
+    onsetThreshold: TRANSCRIBER_SETTINGS.onsetThreshold,
+    frameThreshold: TRANSCRIBER_SETTINGS.frameThreshold,
+  },
+  high: { onsetThreshold: 0.45, frameThreshold: 0.3 },
+};
+
 // ---------------------------------------------------------------------------
 // Clean-up
 // ---------------------------------------------------------------------------
@@ -77,6 +94,11 @@ export const TRANSCRIBER_SETTINGS = {
  * Two overlapping detections at one pitch are one sung note heard twice
  * (typically a harmonic of one part landing on another's pitch), never two
  * parts, so they are merged into their union.
+ *
+ * Notes that merely butt end to start are left alone, even though vibrato
+ * sometimes makes the pitch model hear one held note as several pieces: a
+ * re-sung repeat of the same pitch looks the same, and merging those
+ * mis-split the fixtures badly (shanty accuracy fell from 96% to 59%).
  */
 export function cleanNotes(notes: HeardNote[]): HeardNote[] {
   const sorted = notes
@@ -109,21 +131,92 @@ export function cleanNotes(notes: HeardNote[]): HeardNote[] {
 }
 
 // ---------------------------------------------------------------------------
+// Overtones
+// ---------------------------------------------------------------------------
+
+/**
+ * Intervals, in semitones, at which the pitch model most often mistakes an
+ * overtone for a note: the octave, the twelfth (octave + fifth), and two
+ * octaves (harmonics 2, 3 and 4).
+ */
+const OVERTONE_INTERVALS = new Set([12, 19, 24]);
+
+/** A ghost is heard with at most this fraction of its fundamental's confidence. */
+const OVERTONE_MAX_CONFIDENCE_RATIO = 0.7;
+
+/** A ghost starts and stops with its fundamental, within this many seconds. */
+const OVERTONE_SYNC_SEC = 0.12;
+
+/**
+ * Whether a heard note is probably an overtone of another note, not a part.
+ *
+ * The pitch model's commonest false note is a harmonic of a real one. It has
+ * a tight signature: a fixed interval above a note it starts and stops with
+ * (it is the same sound), and heard with clearly less confidence. A quiet
+ * harmony a third or sixth away, or one that moves on its own, never matches.
+ *
+ * What does match, wrongly, is a quiet part moving in lockstep exactly an
+ * octave, twelfth or two octaves above a louder one: octave doubling, or a
+ * tenor a twelfth over the bass in block chords. Such a note is only made
+ * cheaper to leave out, not removed, so it survives when a part is free to
+ * take it.
+ */
+export function isLikelyOvertone(note: HeardNote, others: HeardNote[]): boolean {
+  const end = note.startSec + note.durationSec;
+  return others.some(
+    (o) =>
+      o !== note &&
+      OVERTONE_INTERVALS.has(note.midiPitch - o.midiPitch) &&
+      note.amplitude <= OVERTONE_MAX_CONFIDENCE_RATIO * o.amplitude &&
+      Math.abs(note.startSec - o.startSec) <= OVERTONE_SYNC_SEC &&
+      Math.abs(end - (o.startSec + o.durationSec)) <= OVERTONE_SYNC_SEC,
+  );
+}
+
+/** `isLikelyOvertone` for every note, in one pass over a sorted list. */
+function overtoneFlags(notes: HeardNote[]): Map<HeardNote, boolean> {
+  const flags = new Map<HeardNote, boolean>();
+  let from = 0;
+  notes.forEach((note) => {
+    while (from < notes.length && notes[from].startSec < note.startSec - OVERTONE_SYNC_SEC) from++;
+    const near: HeardNote[] = [];
+    for (let j = from; j < notes.length && notes[j].startSec <= note.startSec + OVERTONE_SYNC_SEC; j++) {
+      near.push(notes[j]);
+    }
+    flags.set(note, isLikelyOvertone(note, near));
+  });
+  return flags;
+}
+
+// ---------------------------------------------------------------------------
 // 1. How many parts?
 // ---------------------------------------------------------------------------
+
+/** A texture must hold this long, unbroken, to count toward the part count. */
+const MIN_TEXTURE_RUN_SEC = 0.3;
+
+/** And it must add up to at least this much in total. */
+const MIN_TEXTURE_TOTAL_SEC = 1.5;
 
 /**
  * Guess how many independent lines the recording carries.
  *
- * Samples the number of simultaneously sounding notes every 20 ms, over the
- * moments where anything sounds at all, and takes a high quantile. A high
- * quantile rather than the maximum, because the transcriber's occasional
- * ghost note (an overtone read as a pitch) would otherwise add a phantom
- * part; and rather than the median, because a shanty's solo verse should not
- * outvote its four-part chorus.
+ * The answer is the fullest texture the music *sustains*, however briefly
+ * it does so overall: if four parts sing together for a few seconds in a
+ * four-minute song, the song has four parts, and three of them rest most of
+ * the time. (An earlier version took the usual number of simultaneous notes,
+ * which voted brief harmonies out of existence.)
+ *
+ * "Sustains" is what stops a stray note from adding a phantom part: the
+ * count only includes stretches of at least MIN_TEXTURE_RUN_SEC, adding up
+ * to MIN_TEXTURE_TOTAL_SEC. Likely overtones are not counted at all.
  */
-export function estimatePartCount(notes: HeardNote[], quantile = 0.85): number {
-  if (notes.length === 0) return 1;
+export function estimatePartCount(input: HeardNote[]): number {
+  const all = cleanNotes(input);
+  if (all.length === 0) return 1;
+  const flags = overtoneFlags(all);
+  const notes = all.filter((n) => !flags.get(n));
+
   const step = 0.02;
   const end = Math.max(...notes.map((n) => n.startSec + n.durationSec));
   const counts = new Int16Array(Math.ceil(end / step) + 1);
@@ -132,10 +225,22 @@ export function estimatePartCount(notes: HeardNote[], quantile = 0.85): number {
     const b = Math.floor((n.startSec + n.durationSec) / step);
     for (let i = a; i < b; i++) counts[i]++;
   }
-  const sounding = Array.from(counts).filter((c) => c > 0).sort((x, y) => x - y);
-  if (sounding.length === 0) return 1;
-  const q = sounding[Math.min(sounding.length - 1, Math.floor(quantile * sounding.length))];
-  return Math.max(1, Math.min(MAX_PARTS, q));
+
+  const minRun = Math.round(MIN_TEXTURE_RUN_SEC / step);
+  for (let parts = MAX_PARTS; parts > 1; parts--) {
+    let total = 0;
+    let run = 0;
+    for (let i = 0; i <= counts.length; i++) {
+      if (i < counts.length && counts[i] >= parts) {
+        run++;
+      } else {
+        if (run >= minRun) total += run;
+        run = 0;
+      }
+    }
+    if (total * step >= MIN_TEXTURE_TOTAL_SEC) return parts;
+  }
+  return 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,19 +260,26 @@ const LEGATO_TAIL_SEC = 0.1;
 const BUSY_PENALTY = 7;
 
 /**
- * Cost, in semitones, of leaving a note out, per unit of model confidence.
+ * Cost, in semitones, of leaving a note out.
  *
- * The transcriber's commonest mistake is an overtone heard as an extra note
- * an octave or a twelfth above a real one. Such ghosts are less confident, and
- * placing one forces every real note in its chord down a voice. Letting the
- * splitter drop a note, at a price that scales with confidence, lets it skip
- * the ghost instead. A confident note (~0.8) costs ~10 semitones to drop,
- * more than any sensible placement.
+ * Leaving a note out is sometimes right: a chord can hold more pitches than
+ * there are parts, and the transcriber hears overtones as extra notes. An
+ * overtone placed in a part also does damage, forcing every real note in its
+ * chord down a part. So the splitter may drop notes, at a price:
+ *
+ * - **Likely overtones** (see `isLikelyOvertone`) are cheap to drop, in
+ *   proportion to how confidently they were heard.
+ * - **Everything else** is expensive to drop, so that a quiet harmony
+ *   entering a part that has rested all song is placed there rather than
+ *   discarded as noise, even when it lands well away from that part's range.
  */
-const DROP_COST_PER_CONFIDENCE = 12;
+const OVERTONE_DROP_COST_PER_CONFIDENCE = 12;
+const NOTE_DROP_COST = 20;
 
-function dropCost(note: HeardNote): number {
-  return DROP_COST_PER_CONFIDENCE * note.amplitude;
+function dropCost(note: HeardNote, overtone: boolean): number {
+  return overtone
+    ? OVERTONE_DROP_COST_PER_CONFIDENCE * note.amplitude
+    : NOTE_DROP_COST + OVERTONE_DROP_COST_PER_CONFIDENCE * note.amplitude;
 }
 
 /** Cost, in semitones, of a new note crossing a note held in another voice. */
@@ -279,6 +391,7 @@ export function splitIntoVoices(input: HeardNote[], voiceCount: number): VoiceSp
   const k = Math.max(1, Math.min(MAX_PARTS, Math.round(voiceCount)));
   const notes = cleanNotes(input);
   const centres = voiceCentres(notes, k);
+  const overtone = overtoneFlags(notes);
 
   const voices: HeardNote[][] = Array.from({ length: k }, () => []);
   /** Last pitch each voice sang, or null if it has not sung yet. */
@@ -326,7 +439,7 @@ export function splitIntoVoices(input: HeardNote[], voiceCount: number): VoiceSp
     for (let j = 0; j <= k; j++) dp[0][j] = 0;
     for (let i = 1; i <= m; i++) {
       for (let j = 0; j <= k; j++) {
-        const dropNote = dp[i - 1][j] + dropCost(members[i - 1]);
+        const dropNote = dp[i - 1][j] + dropCost(members[i - 1], overtone.get(members[i - 1]) === true);
         if (dropNote < dp[i][j]) {
           dp[i][j] = dropNote;
           step[i][j] = 'note';
@@ -579,17 +692,18 @@ export function estimateBeatGrid(notes: HeardNote[], beatsPerBar = 4): BeatGrid 
 // ---------------------------------------------------------------------------
 
 /**
- * Part names, highest first.
+ * Names for split parts, highest first: "Part 1 (top)" … "Part 4 (bottom)".
  *
- * Neutral on purpose. The transcriber hears pitch, not timbre, so it cannot
- * tell a bass singer from a bass guitar; calling every line a "voice", or
- * guessing "Soprano" from range, would claim knowledge it does not have.
+ * Neutral on purpose. The pitch model hears pitch, not timbre, so within one
+ * stream of notes it cannot tell a bass singer from a bass guitar; guessing
+ * "Soprano" from range would claim knowledge it does not have. Where stem
+ * separation *has* told sources apart, the prefix says so ("Vocals 2").
  */
-function partLabel(index: number, count: number): string {
-  if (count === 1) return 'Part 1';
-  if (index === 0) return 'Part 1 (top)';
-  if (index === count - 1) return `Part ${count} (bottom)`;
-  return `Part ${index + 1}`;
+function partLabel(prefix: string, index: number, count: number): string {
+  if (count === 1) return prefix === 'Part' ? 'Part 1' : prefix;
+  if (index === 0) return `${prefix} 1 (top)`;
+  if (index === count - 1) return `${prefix} ${count} (bottom)`;
+  return `${prefix} ${index + 1}`;
 }
 
 function median(values: number[]): number {
@@ -597,36 +711,62 @@ function median(values: number[]): number {
   return s[Math.floor(s.length / 2)];
 }
 
+/**
+ * Where a stream of heard notes came from.
+ *
+ * - `mix`: the whole recording, unseparated (the "voices only" import).
+ * - `vocals`, `bass`, `other`: a stem from instrument separation (Demucs).
+ *   Drums are never transcribed; a pitch model has nothing useful to say
+ *   about them.
+ */
+export type StemKind = 'mix' | 'vocals' | 'bass' | 'other';
+
+export interface HeardStem {
+  kind: StemKind;
+  notes: HeardNote[];
+}
+
+/** An "other instruments" stem with fewer notes than this is bleed, not a part. */
+const MIN_OTHER_NOTES = 8;
+
 export interface RecordingOptions {
   title: string;
-  /** How many parts to split into. Omit, or pass 'auto', to estimate. */
+  /** How many parts to split the singing into. Omit, or pass 'auto', to estimate. */
   partCount?: number | 'auto';
   beatsPerBar?: number;
 }
 
-/**
- * Build a playable `Score` from what the transcriber heard.
- *
- * Silent voices (which can happen when the part count is forced higher than
- * the music supports) are dropped rather than shown as empty bands.
- */
+/** Build a playable `Score` from an unseparated recording. */
 export function scoreFromRecording(heard: HeardNote[], options: RecordingOptions): Score {
-  const notes = cleanNotes(heard);
-  if (notes.length === 0) {
+  return scoreFromStems([{ kind: 'mix', notes: heard }], options);
+}
+
+/**
+ * Build a playable `Score` from what the transcriber heard, stem by stem.
+ *
+ * The singing (`mix` or `vocals`) is split into parts by pitch and
+ * voice-leading. The bass stem becomes one monophonic part, which drops
+ * overtones and doublings. The other-instruments stem becomes one band with
+ * its chords intact: it is accompaniment to sing against, not a line anyone
+ * is learning, and splitting a piano into "parts" would be meaningless.
+ *
+ * Silent parts (a part count forced higher than the music supports, or a
+ * stem with nothing in it) are dropped rather than shown as empty bands.
+ */
+export function scoreFromStems(stems: HeardStem[], options: RecordingOptions): Score {
+  const cleaned = stems.map((s) => ({ kind: s.kind, notes: cleanNotes(s.notes) }));
+  const everything = cleanNotes(cleaned.flatMap((s) => s.notes));
+  if (everything.length === 0) {
     throw new Error('No notes were heard in that recording.');
   }
 
   const auto = options.partCount === undefined || options.partCount === 'auto';
-  const k = auto ? estimatePartCount(notes) : (options.partCount as number);
-  const { voices, dropped } = splitIntoVoices(notes, k);
-  const grid = estimateBeatGrid(notes, options.beatsPerBar ?? 4);
-
+  const grid = estimateBeatGrid(everything, options.beatsPerBar ?? 4);
   const secPerBeat = 60 / grid.tempoBpm;
   const toBeats = (sec: number): number => Math.max(0, (sec - grid.originSec) / secPerBeat);
   const bar = grid.beatsPerBar;
 
-  const kept = voices.filter((line) => line.length > 0);
-  const parts: Part[] = kept.map((line, i) => {
+  const toPart = (line: HeardNote[], id: string, label: string, voice: string): Part => {
     const events: NoteEvent[] = line.map((n) => {
       const onsetBeats = toBeats(n.startSec);
       return {
@@ -638,17 +778,47 @@ export function scoreFromRecording(heard: HeardNote[], options: RecordingOptions
     });
     const pitches = line.map((n) => n.midiPitch);
     return {
-      id: `voice-${i + 1}`,
-      label: partLabel(i, kept.length),
+      id,
+      label,
       events,
       // G (treble) for anything centred at or above A3, else F (bass).
       clef: median(pitches) >= 57 ? 'G' : 'F',
       // A recording carries no key signature; nothing in the app reads one yet.
       keyFifths: 0,
       range: { minMidi: Math.min(...pitches), maxMidi: Math.max(...pitches) },
-      source: { partId: 'recording', voice: String(i + 1) },
+      source: { partId: 'recording', voice },
     };
-  });
+  };
+
+  const parts: Part[] = [];
+  let dropped = 0;
+  let sungParts = 0;
+  for (const stem of cleaned) {
+    if (stem.notes.length === 0) continue;
+
+    if (stem.kind === 'mix' || stem.kind === 'vocals') {
+      const k = auto ? estimatePartCount(stem.notes) : (options.partCount as number);
+      const split = splitIntoVoices(stem.notes, k);
+      dropped += split.dropped;
+      const kept = split.voices.filter((line) => line.length > 0);
+      const prefix = stem.kind === 'mix' ? 'Part' : 'Vocals';
+      kept.forEach((line, i) => {
+        const id = `${stem.kind}-${i + 1}`;
+        parts.push(toPart(line, id, partLabel(prefix, i, kept.length), id));
+      });
+      sungParts += kept.length;
+    } else if (stem.kind === 'bass') {
+      const split = splitIntoVoices(stem.notes, 1);
+      if (split.voices[0].length > 0) parts.push(toPart(split.voices[0], 'bass', 'Bass', 'bass'));
+    } else {
+      const flags = overtoneFlags(stem.notes);
+      const kept = stem.notes.filter((n) => !flags.get(n));
+      if (kept.length >= MIN_OTHER_NOTES) parts.push(toPart(kept, 'other', 'Other instruments', 'other'));
+    }
+  }
+  if (parts.length === 0) {
+    throw new Error('No notes were heard in that recording.');
+  }
 
   const endBeats = Math.max(
     ...parts.flatMap((p) => p.events.map((e) => e.onsetBeats + e.durationBeats)),
@@ -662,16 +832,20 @@ export function scoreFromRecording(heard: HeardNote[], options: RecordingOptions
     pass: 0,
   }));
 
+  const separated = cleaned.some((s) => s.kind !== 'mix');
+  const sung = `${sungParts} part${sungParts === 1 ? '' : 's'}${auto ? ' (estimated)' : ''}`;
   const warnings = [
-    `Transcribed from a recording, split into ${parts.length} part${parts.length === 1 ? '' : 's'}` +
-      `${auto ? ' (estimated)' : ''}. Bar lines assume a steady ${grid.tempoBpm} bpm in ` +
-      `${bar}/4, so they may drift; the notes themselves keep the recording's own timing.`,
+    (separated
+      ? `Transcribed from a recording after separating vocals from instruments; the singing was split into ${sung}.`
+      : `Transcribed from a recording, split into ${sung}.`) +
+      ` Bar lines assume a steady ${grid.tempoBpm} bpm in ${bar}/4, so they may drift;` +
+      ` the notes themselves keep the recording's own timing.`,
   ];
   if (dropped > 0) {
     warnings.push(
-      `${dropped} faint note${dropped === 1 ? '' : 's'} fit no part's line and ` +
-        `${dropped === 1 ? 'was' : 'were'} left out (usually overtones). ` +
-        `If a part seems to be missing notes, try importing again with more parts.`,
+      `${dropped} note${dropped === 1 ? '' : 's'} fit no part and ` +
+        `${dropped === 1 ? 'was' : 'were'} left out (mostly overtones, or chords with more ` +
+        `notes than parts). If a part seems to be missing notes, try importing again with more parts.`,
     );
   }
 
