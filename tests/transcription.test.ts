@@ -219,10 +219,10 @@ describe('scoreFromRecording', () => {
     const score = scoreFromRecording(heard('wellerman-simple-synth'), { title: 'Shanty' });
     expect(score.title).toBe('Shanty');
     expect(score.parts.map((p) => p.label)).toEqual([
-      'Voice 1 (top)',
-      'Voice 2',
-      'Voice 3',
-      'Voice 4 (bottom)',
+      'Part 1 (top)',
+      'Part 2',
+      'Part 3',
+      'Part 4 (bottom)',
     ]);
     expect(score.lyrics).toEqual([]);
 
@@ -264,7 +264,7 @@ describe('scoreFromRecording', () => {
     const line = [60, 62, 64, 65, 67, 69, 71, 72].map((p, i) => note(i * 0.5, 0.5, p));
     const score = scoreFromRecording(line, { title: 'x', partCount: 3 });
     expect(score.parts).toHaveLength(1);
-    expect(score.parts[0].label).toBe('Melody');
+    expect(score.parts[0].label).toBe('Part 1');
     expect(score.parts[0].events).toHaveLength(8);
   });
 

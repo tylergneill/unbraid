@@ -168,7 +168,7 @@ export function Landing({
               <>
                 <strong>Drop a recording here, or click to choose</strong>
                 <span className="hint">
-                  MP3 or M4A. Works best on unaccompanied singing, one voice per part.
+                  MP3 or M4A. Works best when each part is clearly audible on its own.
                 </span>
               </>
             ) : (

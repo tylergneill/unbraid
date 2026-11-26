@@ -44,7 +44,7 @@ export const MAX_PARTS = 6;
  * Shared by the app and by scripts/transcribe-fixture.ts, so the committed
  * fixtures are exactly what the app would hear. Tuned on those fixtures: a
  * strict onset threshold is what keeps overtones from being read as extra
- * singers (at 0.5 the Bach fixture gains ~100 phantom notes; at 0.7 it has
+ * parts (at 0.5 the Bach fixture gains ~100 phantom notes; at 0.7 it has
  * 303 against a true 302).
  */
 export const TRANSCRIBER_SETTINGS = {
@@ -56,9 +56,13 @@ export const TRANSCRIBER_SETTINGS = {
   minNoteFrames: 11,
   /** Also start notes where a pitch appears without a sharp attack (legato singing). */
   inferOnsets: true,
-  /** Sung range, roughly C2–F6. Anything outside is an overtone or noise. */
-  minFreqHz: 60,
-  maxFreqHz: 1500,
+  /**
+   * Pitch limits in Hz, or null for none. None: a recording may hold
+   * instruments as well as voices, and a bass guitar's low E (41 Hz) is a part
+   * like any other. Basic Pitch itself covers the piano's range, A0–C8.
+   */
+  minFreqHz: null,
+  maxFreqHz: null,
   /** Basic Pitch's "melodia trick" favours one melody line; wrong for part singing. */
   melodiaTrick: false,
 } as const;
@@ -71,8 +75,8 @@ export const TRANSCRIBER_SETTINGS = {
  * Sort, discard degenerate notes, and fuse same-pitch overlaps.
  *
  * Two overlapping detections at one pitch are one sung note heard twice
- * (typically a harmonic of one voice landing on another's pitch), never two
- * singers, so they are merged into their union.
+ * (typically a harmonic of one part landing on another's pitch), never two
+ * parts, so they are merged into their union.
  */
 export function cleanNotes(notes: HeardNote[]): HeardNote[] {
   const sorted = notes
@@ -574,12 +578,18 @@ export function estimateBeatGrid(notes: HeardNote[], beatsPerBar = 4): BeatGrid 
 // Putting it together
 // ---------------------------------------------------------------------------
 
-/** Part names, highest first. Deliberately not "Soprano": a TTBB recording has none. */
-function voiceLabel(index: number, count: number): string {
-  if (count === 1) return 'Melody';
-  if (index === 0) return 'Voice 1 (top)';
-  if (index === count - 1) return `Voice ${count} (bottom)`;
-  return `Voice ${index + 1}`;
+/**
+ * Part names, highest first.
+ *
+ * Neutral on purpose. The transcriber hears pitch, not timbre, so it cannot
+ * tell a bass singer from a bass guitar; calling every line a "voice", or
+ * guessing "Soprano" from range, would claim knowledge it does not have.
+ */
+function partLabel(index: number, count: number): string {
+  if (count === 1) return 'Part 1';
+  if (index === 0) return 'Part 1 (top)';
+  if (index === count - 1) return `Part ${count} (bottom)`;
+  return `Part ${index + 1}`;
 }
 
 function median(values: number[]): number {
@@ -629,7 +639,7 @@ export function scoreFromRecording(heard: HeardNote[], options: RecordingOptions
     const pitches = line.map((n) => n.midiPitch);
     return {
       id: `voice-${i + 1}`,
-      label: voiceLabel(i, kept.length),
+      label: partLabel(i, kept.length),
       events,
       // G (treble) for anything centred at or above A3, else F (bass).
       clef: median(pitches) >= 57 ? 'G' : 'F',
@@ -660,7 +670,7 @@ export function scoreFromRecording(heard: HeardNote[], options: RecordingOptions
   if (dropped > 0) {
     warnings.push(
       `${dropped} faint note${dropped === 1 ? '' : 's'} fit no part's line and ` +
-        `${dropped === 1 ? 'was' : 'were'} left out (usually overtones, not singers). ` +
+        `${dropped === 1 ? 'was' : 'were'} left out (usually overtones). ` +
         `If a part seems to be missing notes, try importing again with more parts.`,
     );
   }

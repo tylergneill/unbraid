@@ -81,10 +81,15 @@ It happens in three steps, all in the browser:
 **How good is it?** On the two synthetic fixtures below, 96–99% of correctly
 heard notes land in the right part, and both tempi and the shanty's downbeat
 come out exact. A real recording will do worse: breath, consonants, vibrato,
-room sound, and unison doubling all cost accuracy. It does best on unaccompanied
-singing with one clear voice per part (a quartet rather than a choir) and steady
-tempo. Parts are named *Voice 1 (top)* … rather than SATB, since a recording does
-not say which voices it holds.
+room sound, and unison doubling all cost accuracy. It does best when each part
+is clearly audible on its own (a quartet rather than a choir) and the tempo is
+steady.
+
+Parts are named *Part 1 (top)* … *Part 4 (bottom)*: in pitch order, and nothing
+more. The model hears pitch, not timbre, so it cannot tell a bass singer from a
+bass guitar, and the names do not pretend to. For the same reason there is no
+pitch floor or ceiling: an instrument's line is a part like any other, across
+the model's full A0–C8 range.
 
 Known limits: bar lines assume one tempo and 4/4 throughout; no lyrics; an
 inner voice the transcriber misses can pull its neighbours into the wrong part
