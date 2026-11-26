@@ -60,6 +60,7 @@ These are deliberate exclusions. The implementing agent should not add them, and
 - **No sing-back, pitch detection, microphone input, or feedback of any kind.** Looping and repetition is the entire pedagogy. This keeps all audio-input problems off the table.
 - **No lyrics, no vocal synthesis, no text-to-speech.** Playback is tones only.
 - **No real recordings, no licensed catalog, no stem separation.** Synthesized audio from the parsed score only. (Possible far-future direction; not now.)
+  *Revised Nov 2026:* a recording may now be imported as a **source of parts**: it is transcribed to notes in the browser and split into voices, then played back as synthesised tones like any score. Playing the recording itself, and audio stem separation, remain out of scope. See the README's "From a recording".
 - **No accounts, sharing, collaboration, or multi-user features.** Single-user, local-first.
 - **No score editing beyond correction of parse errors** (§5.3).
 - **No tempo/key transposition** unless it falls out for free from the playback engine.

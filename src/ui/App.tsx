@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Project } from '../core/types';
 import { parseScoreFile } from '../core/ingest';
 import { parseXmlDom } from '../core/domXml';
+import { scoreFromRecording } from '../core/transcription';
+import { isSupportedAudioFile, transcribeRecording, type TranscribeStage } from '../audio/transcriber';
 import {
   createProject,
   deleteProject,
@@ -10,7 +12,7 @@ import {
   renameProject,
   saveProject,
 } from '../storage/projects';
-import { Landing } from './Landing';
+import { Landing, type RecordingProgress } from './Landing';
 import { Logo } from './Logo';
 import { ProjectView } from './ProjectView';
 
@@ -19,6 +21,7 @@ export function App() {
   const [current, setCurrent] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [recordingProgress, setRecordingProgress] = useState<RecordingProgress | null>(null);
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -42,6 +45,26 @@ export function App() {
     })();
   }, [refresh]);
 
+  /**
+   * Save a freshly imported project and open it.
+   *
+   * The piece parsed, so let the user practise it even if it cannot be
+   * stored. Failing to save is worth saying, but it is not a reason to throw
+   * away a piece they just loaded.
+   */
+  const openNewProject = useCallback(
+    async (project: Project) => {
+      try {
+        await saveProject(project);
+        await refresh();
+      } catch {
+        setError('This piece is loaded but could not be saved, so it will be gone on reload.');
+      }
+      setCurrent(project);
+    },
+    [refresh],
+  );
+
   const handleUpload = useCallback(
     async (file: File) => {
       setError(null);
@@ -56,21 +79,53 @@ export function App() {
         setBusy(false);
         return;
       }
-
-      // The score parsed, so let the user practise it even if it cannot be
-      // stored. Failing to save is worth saying, but it is not a reason to
-      // throw away a piece they just loaded.
-      try {
-        await saveProject(project);
-        await refresh();
-      } catch {
-        setError('This piece is loaded but could not be saved, so it will be gone on reload.');
-      }
-
-      setCurrent(project);
+      await openNewProject(project);
       setBusy(false);
     },
-    [refresh],
+    [openNewProject],
+  );
+
+  const handleRecordingUpload = useCallback(
+    async (file: File, partCount: number | 'auto') => {
+      setError(null);
+      if (!isSupportedAudioFile(file.name)) {
+        setError('Unbraid reads recordings as MP3 or M4A (WAV and AAC also work).');
+        return;
+      }
+
+      const show = (s: TranscribeStage) => {
+        switch (s.stage) {
+          case 'decoding':
+            return setRecordingProgress({ label: 'Decoding the recording…', fraction: null });
+          case 'loading-model':
+            return setRecordingProgress({ label: 'Loading the listening model…', fraction: null });
+          case 'listening':
+            return setRecordingProgress({
+              label: `Listening for notes… ${Math.round(s.fraction * 100)}%`,
+              fraction: s.fraction,
+            });
+          case 'splitting':
+            return setRecordingProgress({ label: 'Separating the parts…', fraction: null });
+        }
+      };
+
+      let project: Project;
+      try {
+        const bytes = await file.arrayBuffer();
+        const heard = await transcribeRecording(bytes, show);
+        show({ stage: 'splitting' });
+        const title = file.name.replace(/\.[^.]+$/, '') || 'Untitled recording';
+        const score = scoreFromRecording(heard, { title, partCount });
+        project = createProject(score, { name: file.name, bytes });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'That recording could not be transcribed.');
+        setRecordingProgress(null);
+        return;
+      }
+      await openNewProject(project);
+      setRecordingProgress(null);
+    },
+    [openNewProject],
   );
 
   const handleOpen = useCallback(async (id: string) => {
@@ -141,7 +196,9 @@ export function App() {
         <Landing
           projects={projects}
           busy={busy}
+          recordingProgress={recordingProgress}
           onUpload={(file) => void handleUpload(file)}
+          onUploadRecording={(file, parts) => void handleRecordingUpload(file, parts)}
           onOpen={(id) => void handleOpen(id)}
           onDelete={(id) => void deleteProject(id).then(refresh)}
           onRename={(id, title) => void renameProject(id, title).then(refresh)}

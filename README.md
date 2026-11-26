@@ -2,13 +2,14 @@
 
 Minimalistic interface for practicing a cappella harmonies.
 
-Upload a score, turn everyone else down, loop the tricky bit, and sing along until
-it sticks. There is no assessment, no microphone, and no notation editing —
+Upload a score (or a recording), turn everyone else down, loop the tricky bit, and
+sing along until it sticks. There is no assessment, no microphone, and no notation editing —
 looping and repetition is the entire pedagogy.
 
 This is **Milestone 1** of [the execution doc](design_docs/unbraid-execution-doc.md):
-the practice instrument, with MusicXML import only. OMR (image/PDF ingest) and the
-note-level correction surface are M2/M3 and are not built.
+the practice instrument, with MusicXML import, plus an experimental second way in:
+importing a recording, which is transcribed and split into parts. OMR (image/PDF
+ingest) and the note-level correction surface are M2/M3 and are not built.
 
 ## Running it
 
@@ -18,16 +19,18 @@ npm run dev      # http://localhost:5173
 ```
 
 ```bash
-npm test         # 129 tests
+npm test         # 154 tests
 npm run build    # typecheck + production bundle
 ```
 
-Everything runs in the browser. There is no server, and no uploaded score ever
-leaves the machine — projects live in IndexedDB.
+Everything runs in the browser. There is no server, and no uploaded score or
+recording ever leaves the machine — projects live in IndexedDB.
 
 ## What it does
 
 - **Import** MusicXML (`.musicxml`, `.xml`) and compressed MusicXML (`.mxl`).
+- **Import a recording** (`.mp3`, `.m4a`; `.wav` and `.aac` also work) on its own
+  tab. See [From a recording](#from-a-recording) below.
 - **Unroll repeats** into a linear timeline, so the playhead matches what you hear
   rather than what is printed. Repeated bars are labelled `7'` on the ruler.
 - **Split voices sharing a staff** into separate parts, so an SA-on-one-treble-staff
@@ -47,6 +50,46 @@ leaves the machine — projects live in IndexedDB.
 Keyboard: <kbd>space</kbd> play/pause · <kbd>S</kbd> just my part · <kbd>L</kbd>
 clear loop · <kbd>0</kbd> reset faders · <kbd>Esc</kbd> stop.
 
+## From a recording
+
+The landing page has two tabs. *From a score* reads MusicXML exactly. *From a
+recording* listens to an audio file and makes its best guess at the parts, then
+opens it in the same band view, so the mixer, loop and tempo all work as usual.
+Playback is still the synthesised tones, not the recording.
+
+It happens in three steps, all in the browser:
+
+1. **Hear the notes.** [Basic Pitch](https://github.com/spotify/basic-pitch-ts)
+   (Spotify, Apache-2.0), a ~900 KB polyphonic pitch model, runs on
+   TensorFlow.js, on the GPU via WebGL where available. It reports every
+   pitch it hears with a start and a length, but not who sang it. TensorFlow.js
+   (~1 MB) is loaded only when a recording is first imported; score users never
+   download it. The thresholds are in `TRANSCRIBER_SETTINGS`.
+2. **Split them into parts** (`splitIntoVoices`). Chord by chord, notes are
+   matched to voices high to low (voices never cross within a chord), each
+   note going to whichever voice can reach it by the smallest step. A faint
+   note that fits no voice's line (usually an overtone) is left out rather
+   than shoving every other voice down. Then each unaccompanied stretch,
+   such as a shanty's solo verse, is reassigned whole to the voice that best
+   carries it on into, or in from, the surrounding harmony. The part count is
+   estimated from how many notes usually sound together, or set by hand (1–6).
+3. **Find the bar lines** (`estimateBeatGrid`). A steady tempo and downbeat are
+   estimated from where notes begin. Notes are *not* snapped to this grid: they
+   keep the recording's own timing, so a wrong guess only misplaces bar lines
+   (and loop-snapping), never the music.
+
+**How good is it?** On the two synthetic fixtures below, 96–99% of correctly
+heard notes land in the right part, and both tempi and the shanty's downbeat
+come out exact. A real recording will do worse: breath, consonants, vibrato,
+room sound, and unison doubling all cost accuracy. It does best on unaccompanied
+singing with one clear voice per part (a quartet rather than a choir) and steady
+tempo. Parts are named *Voice 1 (top)* … rather than SATB, since a recording does
+not say which voices it holds.
+
+Known limits: bar lines assume one tempo and 4/4 throughout; no lyrics; an
+inner voice the transcriber misses can pull its neighbours into the wrong part
+for that chord. Fixing individual notes is the M3 correction surface.
+
 ## Layout
 
 ```
@@ -59,11 +102,14 @@ src/core/      parsing and domain logic — no DOM, no audio, fully tested
   ingest.ts      file sniffing and .mxl unzipping
   mixer.ts       fader link modes
   timeline.ts    loop regions, snapping, pitch ranges
+  transcription.ts  recording → Score: part count, voice split, beat grid
 src/audio/     Tone.js transport and one synth per part
+  transcriber.ts decoding and Basic Pitch inference (lazy-loaded)
 src/storage/   IndexedDB projects
 src/ui/        React components
   Lyrics.tsx     the lyric strip: extraction is in musicxml.ts, fitting here
 tests/         vitest
+scripts/       regenerating the audio fixtures (see fixtures/audio/README.md)
 ```
 
 The parser is written against a small `XmlElement` interface with two
@@ -77,6 +123,7 @@ tests/parser.test.ts   the fixtures, with exact known-good assertions
 tests/unit.test.ts     one behaviour each, over hand-written minimal scores
 tests/mixer.test.ts    link modes, loop regions, timeline helpers
 tests/lyrics.test.ts   lyric extraction, and the fitting the strip depends on
+tests/transcription.test.ts  recording import: part count, voice split, beat grid
 ```
 
 Every test runs off `fixtures/`, which is committed. Nothing reads `downloads/`,
@@ -90,6 +137,7 @@ skips itself when a file is missing is not coverage.
 | `cut-time-fixture` | 2/2, `divisions=2`, dotted notes, and **no tempo marking** |
 | `bach-bwv269` | a real score: pickup bar, ties, dense accidentals, counterpoint |
 | `lyrics-fixture` | words under a **non-first** part, repeated by a repeat, with an elision and a second verse to ignore |
+| `audio/*.notes.json` | what Basic Pitch heard in synthetic performances of `bach-bwv269` and `wellerman-fixture-simple`; the score is ground truth for who sang each note |
 
 The load-bearing assertion is the unroll count: if it reports 16, repeats are not
 being expanded and the playhead will drift out of sync with the bands.
@@ -125,9 +173,10 @@ third-party scores with their own licensing.
 adapt freely, with attribution, non-commercially, under the same terms. See
 [LICENSE](LICENSE).
 
-This covers the source and its own assets, not third-party dependencies and not
-any score you import — imported scores stay under their own rights holders'
-terms and never leave your browser.
+This covers the source and its own assets, not third-party dependencies (Basic
+Pitch and its model are Apache-2.0) and not any score or recording you import —
+imported material stays under its own rights holders' terms and never leaves your
+browser.
 
 ## Known gaps
 

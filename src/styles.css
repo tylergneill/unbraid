@@ -756,3 +756,90 @@ kbd {
 .band-focus + .lyric-row .lyric-gutter {
   color: var(--focus);
 }
+
+/* ---------- Import tabs (score / recording) ---------- */
+
+.import-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.import-tab {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-dim);
+}
+
+.import-tab.active {
+  background: var(--panel-raised);
+  border-color: var(--line);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.dropzone.busy {
+  cursor: progress;
+}
+
+.dropzone.busy:hover {
+  border-color: var(--line);
+  background: var(--panel);
+}
+
+.progress {
+  height: 4px;
+  max-width: 320px;
+  margin: 12px auto;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
+.progress-fill.indeterminate {
+  width: 30%;
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+.import-options {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  color: var(--text-dim);
+}
+
+.import-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.import-options select {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+}
+
+.import-options .hint {
+  font-size: 12.5px;
+  color: var(--text-faint);
+}

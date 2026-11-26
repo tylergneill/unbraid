@@ -23,6 +23,8 @@
   },
   "homepage": "https://github.com/tylergneill/unbraid#readme",
   "dependencies": {
+    "@spotify/basic-pitch": "^1.0.1",
+    "@tensorflow/tfjs": "^3.21.0",
     "fflate": "^0.8.3",
     "idb": "^8.0.3",
     "react": "^19.2.8",
