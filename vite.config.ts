@@ -17,9 +17,14 @@ export default defineConfig({
     alias: { 'onnxruntime-node': 'onnxruntime-web' },
   },
   optimizeDeps: {
-    // ONNX Runtime locates its .wasm files relative to its own module URL;
-    // pre-bundling moves the module and breaks that lookup.
-    exclude: ['onnxruntime-web'],
+    // ONNX Runtime loads its WebAssembly glue (.mjs) and binary (.wasm) from
+    // next to its own module URL. The dev server's dependency pre-bundling
+    // moves the module into node_modules/.vite/deps, where those files do
+    // not exist, so it must be served from node_modules as-is. That includes
+    // `demucs`, which imports it: pre-bundling demucs would pull ONNX Runtime
+    // into the bundle with it, and so would pre-bundling its import under the
+    // aliased name. (Production builds are unaffected.)
+    exclude: ['onnxruntime-web', 'onnxruntime-node', 'demucs'],
   },
   server: { port: 5173 },
   define: {
