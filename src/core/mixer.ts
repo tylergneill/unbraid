@@ -22,6 +22,7 @@ export function initialMixState(score: Score): MixState {
     focusPartId: null,
     loopRegion: null,
     tempoScale: 1,
+    transposeSemitones: 0,
   };
 }
 

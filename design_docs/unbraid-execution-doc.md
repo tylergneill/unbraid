@@ -64,6 +64,7 @@ These are deliberate exclusions. The implementing agent should not add them, and
 - **No accounts, sharing, collaboration, or multi-user features.** Single-user, local-first.
 - **No score editing beyond correction of parse errors** (§5.3).
 - **No tempo/key transposition** unless it falls out for free from the playback engine.
+  *Revised Nov 2026:* both did. Tempo is the transport's playback rate; transposition is applied as each note sounds, so neither reschedules anything.
 
 ## 4. Data model
 

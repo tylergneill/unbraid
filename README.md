@@ -19,7 +19,7 @@ npm run dev      # http://localhost:5173
 ```
 
 ```bash
-npm test         # 167 tests
+npm test         # 185 tests
 npm run build    # typecheck + production bundle
 ```
 
@@ -45,10 +45,22 @@ recording ever leaves the machine — projects live in IndexedDB.
   except your part.
 - **Loop** any span by dragging across the bar ruler; snaps to bar lines.
 - **Tempo** from 40% to 130% for slow practice.
+- **Transpose** up or down by semitones (up to an octave either way), with the
+  *Key* ♭/♯ buttons or <kbd>[</kbd> <kbd>]</kbd>. Playback, the bands, and the pitch
+  ranges beside each part all follow it; it is saved per piece, like the tempo,
+  and the stored score is never changed.
+- **Export for MuseScore.** *Export MIDI* downloads a `.mid` with one named
+  track per part, Unbraid's tempo and bar lines, and any transposition applied.
+  MuseScore opens it directly (one staff per part, bar numbers matching
+  Unbraid) and works out the key itself. For a piece imported from a score,
+  *Original score* downloads the MusicXML you started from, which keeps the full
+  notation and is the better thing to open in MuseScore (transpose there if
+  needed). For a recording, MIDI is the right format: Unbraid knows exact
+  timings, not note values, and MuseScore's MIDI import does the quantising.
 - **Notes pane**, autosaved per project.
 
 Keyboard: <kbd>space</kbd> play/pause · <kbd>S</kbd> just my part · <kbd>L</kbd>
-clear loop · <kbd>0</kbd> reset faders · <kbd>Esc</kbd> stop.
+clear loop · <kbd>0</kbd> reset faders · <kbd>Esc</kbd> stop · <kbd>[</kbd> <kbd>]</kbd> transpose down / up.
 
 ## From a recording
 
@@ -137,6 +149,8 @@ src/core/      parsing and domain logic — no DOM, no audio, fully tested
   ingest.ts      file sniffing and .mxl unzipping
   mixer.ts       fader link modes
   timeline.ts    loop regions, snapping, pitch ranges
+  transpose.ts   transposition of the score and key signature
+  midi.ts        MIDI export (one track per part), for MuseScore
   transcription.ts  recording → Score: part count, voice split, beat grid
 src/audio/     Tone.js transport and one synth per part
   transcriber.ts decoding, and Basic Pitch inference per stem (lazy-loaded)
@@ -161,7 +175,13 @@ tests/unit.test.ts     one behaviour each, over hand-written minimal scores
 tests/mixer.test.ts    link modes, loop regions, timeline helpers
 tests/lyrics.test.ts   lyric extraction, and the fitting the strip depends on
 tests/transcription.test.ts  recording import: part count, voice split, beat grid
+tests/export.test.ts   transposition, and MIDI export read back note for note
 ```
+
+The MIDI export was also checked by opening its files in MuseScore 3: the
+Wellerman fixture transposed +2 and the recording fixture both import as four
+named staves of 22 bars at the right tempo, with the key worked out correctly
+(E minor and D minor).
 
 Every test runs off `fixtures/`, which is committed. Nothing reads `downloads/`,
 so the suite means the same thing on a fresh clone as it does here — a test that

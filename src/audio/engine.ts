@@ -25,8 +25,12 @@ class SynthPart implements AudioSource {
   private readonly synth: Tone.PolySynth;
   private readonly gain: Tone.Gain;
 
-  constructor(part: Part, destination: Tone.InputNode) {
+  /** Reads the engine's current transposition at the moment a note sounds. */
+  private readonly transpose: () => number;
+
+  constructor(part: Part, destination: Tone.InputNode, transpose: () => number) {
     this.id = part.id;
+    this.transpose = transpose;
     this.gain = new Tone.Gain(volumeToGain(80)).connect(destination);
 
     // A soft triangle with a gentle envelope reads as voice-like enough to
@@ -55,7 +59,9 @@ class SynthPart implements AudioSource {
       const duration = Math.max(0.05, ((event.durationBeats / tempoBpm) * 60) - 0.01);
       const id = Tone.getTransport().schedule((time) => {
         this.synth.triggerAttackRelease(
-          Tone.Frequency(event.midiPitch, 'midi').toFrequency(),
+          // Transposed when it sounds, not when it was scheduled, so changing
+          // key never needs a reschedule and takes effect from the next note.
+          Tone.Frequency(event.midiPitch + this.transpose(), 'midi').toFrequency(),
           duration,
           time,
         );
@@ -116,7 +122,7 @@ export class PlaybackEngine {
     this.setLoop(null);
 
     for (const part of score.parts) {
-      const synth = new SynthPart(part, this.master);
+      const synth = new SynthPart(part, this.master, () => this.transposeSemitones);
       this.parts.set(part.id, synth);
       this.scheduledIds.push(...synth.schedule(part, score.tempoBpm));
     }
@@ -226,6 +232,18 @@ export class PlaybackEngine {
    */
   setTempoScale(scale: number): void {
     Tone.getTransport().bpm.value = this.score.tempoBpm * scale;
+  }
+
+  private transposeSemitones = 0;
+
+  /**
+   * Transpose playback by semitones. Notes already sounding are cut, so the
+   * old key does not hang over the new one.
+   */
+  setTranspose(semitones: number): void {
+    if (semitones === this.transposeSemitones) return;
+    this.transposeSemitones = semitones;
+    this.silenceAll();
   }
 
   private silenceAll(): void {

@@ -9,6 +9,8 @@ import {
   soloFocus,
 } from '../core/mixer';
 import { effectiveLoop, normalizeLoopRegion, snapToMeasure } from '../core/timeline';
+import { clampTranspose, transposeScore } from '../core/transpose';
+import { midiFileName, scoreToMidi } from '../core/midi';
 import { Bands } from './Bands';
 import { Transport } from './Transport';
 import { NotesPane } from './NotesPane';
@@ -52,6 +54,7 @@ export function ProjectView({ project, onChange, onBack }: Props) {
     }
     engine.setLoop(project.mixState.loopRegion);
     engine.setTempoScale(project.mixState.tempoScale);
+    engine.setTranspose(project.mixState.transposeSemitones ?? 0);
 
     return () => {
       engine.dispose();
@@ -172,6 +175,32 @@ export function ProjectView({ project, onChange, onBack }: Props) {
     [mix, commit],
   );
 
+  const transpose = mix.transposeSemitones ?? 0;
+
+  const handleTranspose = useCallback(
+    (semitones: number) => {
+      const value = clampTranspose(semitones);
+      commit({ ...mix, transposeSemitones: value });
+      engineRef.current?.setTranspose(value);
+    },
+    [mix, commit],
+  );
+
+  /** What the bands draw: the score as it currently sounds. */
+  const shownScore = useMemo(() => transposeScore(score, transpose), [score, transpose]);
+
+  const handleExportMidi = useCallback(() => {
+    const bytes = scoreToMidi(score, { transposeSemitones: transpose });
+    download(new Blob([bytes], { type: 'audio/midi' }), midiFileName(project.title, transpose));
+  }, [score, transpose, project.title]);
+
+  const sourceIsScore = project.sourceFile !== null && !score.parts.some((p) => p.source.partId === 'recording');
+
+  const handleExportOriginal = useCallback(() => {
+    if (project.sourceFile === null) return;
+    download(new Blob([project.sourceFile.bytes]), project.sourceFile.name);
+  }, [project.sourceFile]);
+
   const handleLinkMode = useCallback(
     (mode: LinkMode) => commit(setLinkMode(mix, mode)),
     [mix, commit],
@@ -195,11 +224,15 @@ export function ProjectView({ project, onChange, onBack }: Props) {
         handleSolo();
       } else if (e.key === '0') {
         handleReset();
+      } else if (e.key === '[') {
+        handleTranspose(transpose - 1);
+      } else if (e.key === ']') {
+        handleTranspose(transpose + 1);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handlePlayPause, handleStop, handleClearLoop, handleSolo, handleReset]);
+  }, [handlePlayPause, handleStop, handleClearLoop, handleSolo, handleReset, handleTranspose, transpose]);
 
   const loop = effectiveLoop(score, mix.loopRegion);
   const relativePosition = Math.max(0, positionBeats - loop.startBeats);
@@ -215,6 +248,25 @@ export function ProjectView({ project, onChange, onBack }: Props) {
         <span className="band-range">
           {score.parts.length} parts · {score.measures.length} bars
         </span>
+        <button
+          className="ghost"
+          onClick={handleExportMidi}
+          title={
+            'Download a MIDI file, one track per part, to open in MuseScore' +
+            (transpose === 0 ? '' : ` (transposed ${transpose > 0 ? 'up' : 'down'} ${Math.abs(transpose)})`)
+          }
+        >
+          Export MIDI
+        </button>
+        {sourceIsScore && (
+          <button
+            className="ghost"
+            onClick={handleExportOriginal}
+            title="Download the score file you imported, untouched (best for MuseScore: keeps the notation)"
+          >
+            Original score
+          </button>
+        )}
       </div>
 
       {warningsOpen && score.warnings.length > 0 && (
@@ -231,7 +283,7 @@ export function ProjectView({ project, onChange, onBack }: Props) {
       )}
 
       <Bands
-        score={score}
+        score={shownScore}
         mix={mix}
         positionBeats={positionBeats}
         pixelsPerBeat={ZOOM_LEVELS[zoom]}
@@ -252,6 +304,7 @@ export function ProjectView({ project, onChange, onBack }: Props) {
         onClearLoop={handleClearLoop}
         onSolo={handleSolo}
         onTempoScale={handleTempoScale}
+        onTranspose={handleTranspose}
         onZoom={(delta) =>
           setZoom((z) => Math.max(0, Math.min(ZOOM_LEVELS.length - 1, z + delta)))
         }
@@ -266,8 +319,21 @@ export function ProjectView({ project, onChange, onBack }: Props) {
         Click the bar ruler to jump, drag across it to loop a span · mark your line with{' '}
         <em>set as mine</em> to unlock "Just my part" and "All but mine" ·{' '}
         <kbd>space</kbd> play · <kbd>S</kbd> just my part · <kbd>L</kbd> clear loop ·{' '}
-        <kbd>0</kbd> reset faders
+        <kbd>0</kbd> reset faders · <kbd>[</kbd> <kbd>]</kbd> key down / up
       </div>
     </div>
   );
+}
+
+/** Save a blob through the browser's download prompt. */
+function download(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Give the browser a moment to start the download before releasing the URL.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

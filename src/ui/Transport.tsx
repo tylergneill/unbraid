@@ -1,8 +1,9 @@
 import type { LinkMode, MixState, Score } from '../core/types';
 import { beatsToSeconds, formatTime } from '../core/timeline';
+import { MAX_TRANSPOSE, formatTranspose } from '../core/transpose';
 
 /**
- * Transport, link-mode selector, and tempo (execution doc §6.2).
+ * Transport, link-mode selector, tempo, and transposition (execution doc §6.2).
  */
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
   onClearLoop: () => void;
   onSolo: () => void;
   onTempoScale: (scale: number) => void;
+  onTranspose: (semitones: number) => void;
   onZoom: (delta: number) => void;
 }
 
@@ -40,8 +42,10 @@ export function Transport({
   onClearLoop,
   onSolo,
   onTempoScale,
+  onTranspose,
   onZoom,
 }: Props) {
+  const transpose = mix.transposeSemitones ?? 0;
   const focusLabel = score.parts.find((p) => p.id === mix.focusPartId)?.label ?? 'your part';
   const tempo = score.tempoBpm * mix.tempoScale;
   const position = beatsToSeconds(positionBeats, tempo);
@@ -118,6 +122,34 @@ export function Transport({
         <span className="clock" style={{ minWidth: 62 }}>
           {Math.round(tempo)} bpm
         </span>
+      </div>
+
+      <div className="group" title="Transpose: move every part up or down by semitones ( [ and ] )">
+        <label>Key</label>
+        <button
+          className="ghost"
+          onClick={() => onTranspose(transpose - 1)}
+          disabled={transpose <= -MAX_TRANSPOSE}
+          aria-label="Transpose down a semitone"
+        >
+          ♭
+        </button>
+        <button
+          className={transpose === 0 ? 'ghost transpose' : 'ghost transpose on'}
+          onClick={() => onTranspose(0)}
+          disabled={transpose === 0}
+          title={transpose === 0 ? 'As written' : 'Back to the written key'}
+        >
+          {formatTranspose(transpose)}
+        </button>
+        <button
+          className="ghost"
+          onClick={() => onTranspose(transpose + 1)}
+          disabled={transpose >= MAX_TRANSPOSE}
+          aria-label="Transpose up a semitone"
+        >
+          ♯
+        </button>
       </div>
 
       <span className="spacer" style={{ flex: 1 }} />

@@ -97,6 +97,11 @@ export interface MixState {
   loopRegion: { startBeats: number; endBeats: number } | null;
   /** Playback tempo, as a multiplier of the score's notated tempo. */
   tempoScale: number;
+  /**
+   * Transposition in semitones, applied to playback, the bands, and export.
+   * Optional so that projects stored before transposition existed still load.
+   */
+  transposeSemitones?: number;
 }
 
 export interface Project {
