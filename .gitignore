@@ -46,3 +46,6 @@ downloads
 
 # Scratch files
 *.local
+
+# Python bytecode (scripts/synth-choir.py)
+__pycache__
